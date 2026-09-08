@@ -2,6 +2,7 @@
 #include <cmath>
 #include "../core/blackhole.hpp"
 #include "../core/integrator.hpp"
+#include "../core/ephemeris.hpp"
 #include "../core/scenario.hpp"
 #include "../core/units.hpp"
 #include "microtest.hpp"
@@ -69,4 +70,70 @@ TEST(un_encuentro_a_100_UA_eyecta_planetas_en_vez_de_tragarselos) {
     }
     ASSERT(ejected > 0);
     ASSERT(captured == 0);
+}
+
+TEST(un_agujero_supermasivo_si_devora_planetas_a_escala_real) {
+    // Sgr A*, el agujero del centro de la Via Lactea: 4.3 millones de masas
+    // solares, horizonte de 0.085 UA y ultima orbita estable en 0.25 UA.
+    // A esa escala la absorcion deja de ser una rareza.
+    World w = makeSolarSystemJ2000();
+    const std::size_t bh = w.add("SgrA", BodyKind::BlackHole, 4.3e6, 0.0,
+                                 Vec3{40, 0, 0}, Vec3{0, 0, 0});
+    ForceConfig cfg;
+    computeAccelerations(w, cfg);
+    for (int i = 0; i < 4000; ++i) {
+        stepAdaptive(w, 0.5, Integrator::VerletKDK, cfg);
+        processCaptures(w, bh, BlackHoleConfig{});
+    }
+    int eaten = 0;
+    for (std::size_t i = 1; i < 9; ++i) if (!w.alive[i]) ++eaten;
+    ASSERT(eaten == 8);              // se los traga todos
+    ASSERT(w.alive[0] == 0);         // y al Sol tambien
+    ASSERT(w.mass[bh] > 4.3e6);      // gana la masa de lo que ha tragado
+}
+
+TEST(un_agujero_de_diez_masas_solares_no_se_come_nada_a_escala_real) {
+    // El mismo escenario con 10 masas solares: horizonte de 30 km, ultima
+    // orbita estable en 89 km. Ningun planeta pasa tan cerca. Lo que hace
+    // es desordenar el sistema, no devorarlo.
+    World w = makeSolarSystemJ2000();
+    const std::size_t bh = w.add("agujero", BodyKind::BlackHole, 10.0, 0.0,
+                                 Vec3{40, 0, 0}, Vec3{0, 0, 0});
+    ForceConfig cfg;
+    computeAccelerations(w, cfg);
+    for (int i = 0; i < 4000; ++i) {
+        stepAdaptive(w, 0.5, Integrator::VerletKDK, cfg);
+        processCaptures(w, bh, BlackHoleConfig{});
+    }
+    int eaten = 0;
+    for (std::size_t i = 1; i < 9; ++i) if (!w.alive[i]) ++eaten;
+    ASSERT(eaten == 0);
+}
+
+TEST(el_perihelio_del_encuentro_se_calcula_bien) {
+    // Orbita circular de radio 1: el perihelio es 1.
+    const double mu = G * 1.0;
+    const double v = std::sqrt(mu);
+    ASSERT_NEAR(pericenterDistance(Vec3{1, 0, 0}, Vec3{0, v, 0}, mu), 1.0, 1e-12);
+    // Caida radial: pasa por el centro.
+    ASSERT_NEAR(pericenterDistance(Vec3{1, 0, 0}, Vec3{-v, 0, 0}, mu), 0.0, 1e-12);
+}
+
+TEST(el_radio_de_captura_forzado_hace_que_si_coma) {
+    // Con minRadius igual al horizonte dibujado, lo que ves y lo que pasa
+    // coinciden. Sigue sin ser escala real, y por eso se etiqueta.
+    World w = makeSolarSystemJ2000();
+    const std::size_t bh = w.add("agujero", BodyKind::BlackHole, 10.0, 0.0,
+                                 Vec3{1.0, 0, 0}, Vec3{0, 0.005, 0});
+    ForceConfig cfg;
+    computeAccelerations(w, cfg);
+    const double drawn = schwarzschildRadius(10.0) * 1e6;
+    int eaten = 0;
+    for (int i = 0; i < 6000; ++i) {
+        stepAdaptive(w, 0.5, Integrator::VerletKDK, cfg);
+        processCaptures(w, bh, BlackHoleConfig{}, drawn);
+    }
+    for (std::size_t i = 1; i < 9; ++i) if (!w.alive[i]) ++eaten;
+    ASSERT(drawn > 0.1);       // 0.197 UA
+    ASSERT(eaten > 0);
 }

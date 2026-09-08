@@ -25,6 +25,11 @@ double schwarzschildRadius(double massSolar);  // TODO
 //   d = R_cuerpo * (2 * M / m_cuerpo)^(1/3)
 double rocheLimit(double holeMass, double bodyMass, double bodyRadius);  // TODO
 
+// Distancia de maxima aproximacion de la orbita relativa (perihelio del
+// encuentro). Es el criterio correcto de captura: no importa donde este el
+// cuerpo ahora, sino por donde va a pasar.
+double pericenterDistance(const Vec3& relPos, const Vec3& relVel, double mu);
+
 // Radio efectivo de captura con enfoque gravitatorio, para un cuerpo que
 // llega con velocidad relativa v en el infinito:
 //   b_max^2 = r_s^2 * (1 + 2GM / (r_s * v^2))
@@ -35,8 +40,11 @@ double captureRadius(double holeMass, double relativeSpeed);  // TODO
 // Test obligatorio: el momento lineal total antes y despues debe ser
 // identico hasta precision de maquina. La energia NO se conserva: la
 // diferencia se acumula en World::absorbedEnergy.
+// minRadius fuerza un radio de captura mayor que el fisico. Se usa cuando
+// el horizonte se dibuja ampliado, para que lo mostrado y lo simulado
+// coincidan. No es fisica: es coherencia visual, y hay que etiquetarla.
 void processCaptures(World& w, std::size_t holeIndex,
-                     const BlackHoleConfig& cfg);  // TODO
+                     const BlackHoleConfig& cfg, double minRadius = 0.0);
 
 void processTidalDisruption(World& w, std::size_t holeIndex,
                             const BlackHoleConfig& cfg);  // TODO
