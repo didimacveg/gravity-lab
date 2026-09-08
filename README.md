@@ -186,7 +186,7 @@ CI compiles the project and runs the full validation suite on every push.
 - The Moon is folded into Earth as a single body at the Earth-Moon barycentre.
 - No asteroids beyond the three largest, no radiation pressure. This accounts for the 0.9% gap between the 526.6 arcsec/century measured here and the 531.5 of the literature.
 - The browser build uses orthographic projection onto the ecliptic rather than a full 3D renderer.
-- The background sky is a 28-star catalogue with real J2000 coordinates, magnitudes, distances and spectral colours, plus synthetic filler. Parallax is computed from true distances and is therefore sub-pixel, as it should be; an exaggeration control makes it visible.
+- The background sky is a 28-star catalogue with real J2000 coordinates, magnitudes, distances and spectral colours, plus synthetic filler, rendered gnomonically so that it magnifies at the same rate as the scene. Parallax is computed from true catalogue distances and is therefore sub-pixel, as it should be; an exaggeration control makes it visible, and dragging can be interpreted either as translating the observer (no parallax) or as rotating the camera (sky follows).
 
 ## Author
 

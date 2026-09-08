@@ -144,6 +144,7 @@
     <div class="check"><input type="checkbox" id="logscale"><label for="logscale">Escala logarítmica</label></div>
     <div class="check"><input type="checkbox" id="orbits" checked><label for="orbits">Órbitas</label></div>
     <div class="check"><input type="checkbox" id="starnames" checked><label for="starnames">Nombres de estrellas</label></div>
+    <div class="check"><input type="checkbox" id="skyfollow" checked><label for="skyfollow">El cielo acompaña al arrastrar</label></div>
     <div class="check"><input type="checkbox" id="belt"><label for="belt">Cinturón de asteroides</label></div>
     <div class="check"><input type="checkbox" id="minor" checked><label for="minor">Enanos y cometas</label></div>
     <label class="row">Inclinación de cámara <b><span id="tiltv">0</span>°</b></label>
@@ -656,7 +657,7 @@ addEventListener("resize", resize);
 let world, e0, bh = -1, running = true;
 let scale = 22, camX = 0, camY = 0, userZoomed = false;
 const state = { method: "yoshida4", dt: 0.5, speed: 40, pn: false,
-                trails: true, log: false, bhMass: 10, bhScale: 1e6, captureVisual: true, tilt: 0, belt: false, parallax: 1, starNames: true, substeps: 0, throttled: false, diverged: 0, minor: true, orbits: true, j2: false,
+                trails: true, log: false, bhMass: 10, bhScale: 1e6, captureVisual: true, tilt: 0, belt: false, parallax: 1, skyFollows: true, starNames: true, substeps: 0, throttled: false, diverged: 0, minor: true, orbits: true, j2: false,
                 tampered: false, selected: -1, ejected: new Set(), eaten: [] };
 
 function reset() {
@@ -751,32 +752,58 @@ const SKY = STARS.map(([n, ra, dec, mag, ly, col]) =>
 const FILLER_SKY = (() => {
   let s = 987654321;
   const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-  return Array.from({ length: 520 }, () => {
+  return Array.from({ length: 2400 }, () => {
     const u = rnd() * 2 - 1, th = rnd() * 2 * Math.PI, r = Math.sqrt(1 - u * u);
     return { d: [r * Math.cos(th), r * Math.sin(th), u], mag: 3 + rnd() * 3,
              ly: 200 + rnd() * 3000, col: "#c6d4ec" };
   });
 })();
 
-// Radio de la boveda celeste, en UA. Es una constante de dibujo: las
-// estrellas se pintan como si estuvieran ahi, para que la camara las trate
-// igual que a los planetas. Su distancia real solo interviene en el paralaje.
-const DOME_AU = 42;
+// El fallo anterior: proyectar las estrellas ortograficamente sobre una
+// esfera. La proyeccion ortografica de una esfera es un DISCO, asi que el
+// cielo quedaba encerrado en un circulo en medio de la pantalla y al
+// alejar el zoom se encogia como una bola. Parecia otra capa porque lo era:
+// dos proyecciones geometricamente incompatibles.
+//
+// Lo correcto para un fondo a distancia infinita es una proyeccion
+// gnomonica, que es lo que hace cualquier camara real: la distancia al
+// centro de la imagen va como la tangente del angulo respecto al eje de
+// vision. Llena la pantalla entera y, sobre todo, amplia al mismo ritmo
+// que la escena, porque es la misma camara en perspectiva.
 
-// Proyeccion de una estrella con la MISMA camara que los planetas.
-// El unico desplazamiento por mover el observador es el paralaje:
-//   angulo = base / distancia_real
-// Sobre la boveda eso son DOME_AU * base / distancia UA. Para Alfa Centauri,
-// a 276000 UA, moverse 30 UA da 0.06 px: por eso las estrellas no se mueven
-// al desplazar la vista. No es un fallo, es que estan lejisimos.
+// Altura del observador sobre la ecliptica, en UA. Fija la distancia focal
+// y con ella el campo de vision: F = scale * OBSERVER_AU, de modo que un
+// objeto a esa distancia se dibuja exactamente a la escala de los planetas.
+const OBSERVER_AU = 60;
+
 function projectSky(dir, distAU) {
   const ct = Math.cos(state.tilt), st = Math.sin(state.tilt);
-  const dy = dir[1] * ct - dir[2] * st;
-  const depth = dir[1] * st + dir[2] * ct;
-  if (depth > 0.999) return null;
-  const p = DOME_AU * state.parallax / distAU;
-  return [W / 2 + 134 + scale * (DOME_AU * dir[0] - camX * p),
-          H / 2 + scale * (DOME_AU * dy - camY * p)];
+
+  // Paralaje real: desplazamiento angular = base / distancia.
+  // Para Alfa Centauri, a 276000 UA, moverse 30 UA da 0.06 px. Que no se
+  // muevan al desplazar la vista no es un fallo: estan lejisimos.
+  const k = state.parallax / distAU;
+  const dx = dir[0] - camX * k;
+  const dyy = dir[1] - camY * k;
+
+  const dy = dyy * ct - dir[2] * st;          // eje vertical de pantalla
+  const depth = dyy * st + dir[2] * ct;       // eje de vision
+  const a = -depth;
+  if (a <= 0.08) return null;                 // detras de la camara o rasante
+
+  const F = scale * OBSERVER_AU;
+  let sx = W / 2 + 134 + F * dx / a;
+  let sy = H / 2 + F * dy / a;
+
+  // Arrastrar admite dos lecturas, y las dos son fisicas:
+  //  - trasladar al observador: las estrellas no se mueven, porque el
+  //    paralaje a esas distancias es de centesimas de pixel;
+  //  - girar la camara: entonces el cielo acompana exactamente, igual que
+  //    al mover un telescopio.
+  // Este interruptor elige entre las dos. El giro no cambia la fisica del
+  // sistema, solo hacia donde se mira.
+  if (state.skyFollows) { sx -= camX * scale; sy -= camY * scale; }
+  return [sx, sy];
 }
 
 // Brillo aparente segun la escala de magnitudes: cada 5 magnitudes es un
@@ -1159,6 +1186,7 @@ $("plx").oninput = (e) => {
 $("tilt").oninput = (e) => { state.tilt = (+e.target.value) * Math.PI / 180; $("tiltv").textContent = e.target.value; };
 $("orbits").onchange = (e) => { state.orbits = e.target.checked; };
 $("starnames").onchange = (e) => { state.starNames = e.target.checked; };
+$("skyfollow").onchange = (e) => { state.skyFollows = e.target.checked; };
 $("j2").onchange = (e) => { state.j2 = e.target.checked; };
 $("minor").onchange = (e) => { state.minor = e.target.checked; reset(); };
 $("star").onclick = () => {
