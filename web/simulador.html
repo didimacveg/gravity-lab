@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gravity-lab</title>
+<style>
+  :root {
+    --sky: #080b12;
+    --panel: #0f1420;
+    --rule: #1f2937;
+    --ink: #cdd6e3;
+    --dim: #6d7a8d;
+    --warn: #e0a53c;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--sky);
+    color: var(--ink);
+    font: 14px/1.5 "Inter", "Segoe UI", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+  }
+  canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  .rail {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 268px;
+    background: rgba(15, 20, 32, .93);
+    border-right: 1px solid var(--rule);
+    padding: 20px 20px 24px;
+    overflow-y: auto;
+    backdrop-filter: blur(6px);
+  }
+  .rail h1 {
+    font-size: 15px; font-weight: 600; letter-spacing: .01em;
+    margin: 0 0 2px;
+  }
+  .rail h1 + p { margin: 0 0 22px; color: var(--dim); font-size: 12.5px; }
+
+  .group { border-top: 1px solid var(--rule); padding: 14px 0 4px; }
+  .group > span { display: block; color: var(--dim); font-size: 12px; margin-bottom: 9px; }
+
+  .seg { display: flex; gap: 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .seg button {
+    flex: 1; background: none; border: 0; border-right: 1px solid var(--rule);
+    color: var(--dim); font: inherit; font-size: 12.5px; padding: 6px 0; cursor: pointer;
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: #1c2536; color: var(--ink); }
+  .seg button:focus-visible { outline: 2px solid #4a7fd0; outline-offset: -2px; }
+
+  label.row { display: flex; justify-content: space-between; align-items: baseline;
+              margin: 12px 0 4px; font-size: 12.5px; color: var(--dim); }
+  label.row b { color: var(--ink); font-weight: 500; }
+  input[type=range] { width: 100%; accent-color: #4a7fd0; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 12.5px; }
+  .check input { accent-color: #4a7fd0; }
+
+  .act { display: flex; gap: 8px; margin-top: 14px; }
+  .act button {
+    flex: 1; background: #1a2233; border: 1px solid var(--rule); color: var(--ink);
+    font: inherit; font-size: 12.5px; padding: 7px 0; border-radius: 3px; cursor: pointer;
+  }
+  .act button:hover { background: #222c42; }
+
+  .readout {
+    position: fixed; left: 288px; bottom: 20px;
+    display: flex; gap: 26px; align-items: flex-end;
+    font-size: 12.5px; color: var(--dim);
+    pointer-events: none;
+  }
+  .readout div b { display: block; color: var(--ink); font-size: 19px; font-weight: 500; line-height: 1.25; }
+  .readout .flag { color: var(--warn); max-width: 260px; }
+
+  .info {
+    position: fixed; top: 20px; right: 20px; width: 292px;
+    background: rgba(15, 20, 32, .95); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 16px 18px 18px;
+  }
+  .info[hidden] { display: none; }
+  .info h2 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+  .info .sub { color: var(--dim); font-size: 12px; margin-bottom: 12px; }
+  .info dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 0 0 13px; font-size: 12.5px; }
+  .info dt { color: var(--dim); }
+  .info dd { margin: 0; text-align: right; }
+  .info p { margin: 0; font-size: 12.5px; color: #a9b4c4; }
+  .info button { position: absolute; top: 12px; right: 12px; background: none; border: 0;
+                 color: var(--dim); font: inherit; font-size: 16px; cursor: pointer; line-height: 1; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<aside class="rail">
+  <h1>gravity-lab</h1>
+  <p>Sistema solar en J2000, integrado con gravedad newtoniana.</p>
+
+  <div class="group">
+    <span>Integrador</span>
+    <div class="seg" id="method">
+      <button data-m="euler">Euler</button>
+      <button data-m="verlet">Verlet</button>
+      <button data-m="yoshida4" aria-pressed="true">Yoshida&nbsp;4</button>
+    </div>
+    <label class="row">Paso de tiempo <b><span id="dtv">0.50</span> días</b></label>
+    <input type="range" id="dt" min="-2" max="1.1" step="0.05" value="-0.3">
+    <label class="row">Velocidad <b><span id="spv">40</span> pasos/frame</b></label>
+    <input type="range" id="speed" min="1" max="400" step="1" value="40">
+    <div class="check">
+      <input type="checkbox" id="pn"><label for="pn">Corrección relativista 1PN</label>
+    </div>
+    <div class="check">
+      <input type="checkbox" id="j2"><label for="j2">Achatamiento del Sol (J2)</label>
+    </div>
+  </div>
+
+  <div class="group">
+    <span>Agujero negro</span>
+    <label class="row">Masa <b><span id="bhmv">10</span> M☉</b></label>
+    <input type="range" id="bhm" min="1" max="100" step="1" value="10">
+    <label class="row">Horizonte ampliado <b>×<span id="bhsv">10⁶</span></b></label>
+    <input type="range" id="bhs" min="0" max="8" step="1" value="6">
+    <div class="act">
+      <button id="drop">Soltar a 100 UA</button>
+      <button id="clear">Quitar</button>
+    </div>
+    <div class="act">
+      <button id="star">Estrella de paso</button>
+    </div>
+  </div>
+
+  <div class="group">
+    <span>Vista</span>
+    <div class="check"><input type="checkbox" id="trails" checked><label for="trails">Estelas</label></div>
+    <div class="check"><input type="checkbox" id="logscale"><label for="logscale">Escala logarítmica</label></div>
+    <div class="check"><input type="checkbox" id="orbits" checked><label for="orbits">Órbitas</label></div>
+    <div class="check"><input type="checkbox" id="starnames" checked><label for="starnames">Nombres de estrellas</label></div>
+    <div class="check"><input type="checkbox" id="belt"><label for="belt">Cinturón de asteroides</label></div>
+    <div class="check"><input type="checkbox" id="minor" checked><label for="minor">Enanos y cometas</label></div>
+    <label class="row">Inclinación de cámara <b><span id="tiltv">0</span>°</b></label>
+    <input type="range" id="tilt" min="0" max="82" step="1" value="0">
+    <div class="act">
+      <button id="fit">Encuadrar</button>
+      <button id="pause">Pausa</button>
+      <button id="reset">Reiniciar</button>
+    </div>
+  </div>
+</aside>
+
+<div class="readout">
+  <div>Tiempo<b><span id="years">0</span> años</b></div>
+  <div>Deriva de energía<b><span id="drift">0</span></b></div>
+  <div>Subpasos/frame<b><span id="subs">0</span></b></div>
+  <div class="flag" id="flag"></div>
+</div>
+
+<section class="info" id="info" hidden>
+  <button id="close" aria-label="Cerrar">×</button>
+  <h2 id="iname"></h2>
+  <div class="sub" id="isub"></div>
+  <dl>
+    <dt>Distancia al Sol</dt><dd><span id="ir"></span> UA</dd>
+    <dt>Velocidad</dt><dd><span id="iv"></span> km/s</dd>
+    <dt>Masa</dt><dd><span id="im"></span> M☉</dd>
+    <dt>Excentricidad</dt><dd><span id="iecc"></span></dd>
+    <dt>Perihelio · afelio</dt><dd><span id="iap"></span> UA</dd>
+    <dt>Achatamiento b/a</dt><dd><span id="iba"></span></dd>
+    <dt>Energía orbital</dt><dd><span id="ie"></span></dd>
+  </dl>
+  <p id="itext"></p>
+  <div id="bhblock" hidden>
+    <dl style="margin-top:13px">
+      <dt>Horizonte r<sub>s</sub></dt><dd><span id="brs"></span></dd>
+      <dt>Radio de captura</dt><dd><span id="brc"></span> UA</dd>
+      <dt>Radio de marea (Tierra)</dt><dd><span id="brt"></span> UA</dd>
+      <dt>Radio de Hill</dt><dd><span id="brh"></span> UA</dd>
+    </dl>
+    <p id="bpull" style="margin-top:10px"></p>
+  </div>
+</section>
+
+<script>
+// Puerto directo de core/ en JavaScript. Mismas unidades: UA, dias, masas
+// solares. Mismos elementos J2000. Mismo integrador. Los numeros que salen
+// aqui coinciden con los del ejecutable de C++.
+const G = 2.9591220828559e-4;
+const C_LIGHT = 173.1446326846693;
+const ARCSEC_PER_RADIAN = 206264.806247;
+
+// nombre, masa(Msol), a, e, i, L, longitud del perihelio, nodo, color, radio de dibujo
+const PLANETS = [
+  ["Mercurio", 1.66012e-7, 0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593, "#b0a9a2", 2.0],
+  ["Venus",    2.44784e-6, 0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255, "#e6c27a", 2.6],
+  ["Tierra",   3.04043e-6, 1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0.0, "#5b9bd5", 2.8],
+  ["Marte",    3.22715e-7, 1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891, "#c1440e", 2.2],
+  ["Jupiter",  9.54792e-4, 5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909, "#d8a86a", 5.5],
+  ["Saturno",  2.85886e-4, 9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448, "#e3d9a0", 5.0],
+  ["Urano",    4.36624e-5, 19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503, "#9fd8e0", 3.8],
+  ["Neptuno",  5.15139e-5, 30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574, "#5a7fd0", 3.6],
+];
+
+const D2R = Math.PI / 180;
+
+function stateFromElements(a, e, iDeg, LDeg, periDeg, nodeDeg, mass) {
+  const i = iDeg * D2R, node = nodeDeg * D2R, argPeri = (periDeg - nodeDeg) * D2R;
+  let M = ((LDeg - periDeg) * D2R + Math.PI) % (2 * Math.PI);
+  if (M < 0) M += 2 * Math.PI;
+  M -= Math.PI;
+
+  // Ecuacion de Kepler M = E - e sin E, por Newton-Raphson
+  let E = M;
+  for (let k = 0; k < 60; k++) {
+    const dE = -(E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    E += dE;
+    if (Math.abs(dE) < 1e-15) break;
+  }
+
+  const mu = G * (1 + mass);
+  const cE = Math.cos(E), sE = Math.sin(E);
+  const r = a * (1 - e * cE), n = Math.sqrt(mu / (a * a * a));
+  const xp = a * (cE - e), yp = a * Math.sqrt(1 - e * e) * sE;
+  const vxp = -a * a * n * sE / r, vyp = a * a * n * Math.sqrt(1 - e * e) * cE / r;
+
+  const cw = Math.cos(argPeri), sw = Math.sin(argPeri);
+  const cO = Math.cos(node), sO = Math.sin(node);
+  const ci = Math.cos(i), si = Math.sin(i);
+  const rot = (x, y) => {
+    const x1 = x * cw - y * sw, y1 = x * sw + y * cw;
+    return [x1 * cO - y1 * ci * sO, x1 * sO + y1 * ci * cO, y1 * si];
+  };
+  return [rot(xp, yp), rot(vxp, vyp)];
+}
+
+function makeSolarSystem(opts = {}) {
+  const w = {
+    n: 0, name: [], mass: [], color: [], drawRadius: [], kind: [],
+    x: [], y: [], z: [], vx: [], vy: [], vz: [],
+    ax: [], ay: [], az: [], alive: [], trail: [],
+    time: 0, absorbed: 0,
+  };
+  add(w, "Sol", 1.0, [0, 0, 0], [0, 0, 0], "#ffd24a", 6.5, "star");
+  for (const [name, mass, a, e, i, L, peri, node, color, rad] of PLANETS) {
+    const [p, v] = stateFromElements(a, e, i, L, peri, node, mass);
+    add(w, name, mass, p, v, color, rad, "planet");
+  }
+  if (opts.minor) addMinorBodies(w);
+  if (opts.belt) addBelt(w, opts.belt);
+  toBarycentric(w);   // una sola vez, con todos los cuerpos ya dentro
+  return w;
+}
+
+function add(w, name, mass, p, v, color, drawRadius, kind) {
+  w.name.push(name); w.mass.push(mass); w.color.push(color);
+  w.drawRadius.push(drawRadius); w.kind.push(kind);
+  w.x.push(p[0]); w.y.push(p[1]); w.z.push(p[2]);
+  w.vx.push(v[0]); w.vy.push(v[1]); w.vz.push(v[2]);
+  w.ax.push(0); w.ay.push(0); w.az.push(0);
+  w.alive.push(true); w.trail.push([]);
+  return w.n++;
+}
+
+function toBarycentric(w) {
+  let mx = 0, my = 0, mz = 0, mvx = 0, mvy = 0, mvz = 0, M = 0;
+  for (let i = 0; i < w.n; i++) {
+    if (!w.alive[i]) continue;
+    M += w.mass[i];
+    mx += w.mass[i] * w.x[i]; my += w.mass[i] * w.y[i]; mz += w.mass[i] * w.z[i];
+    mvx += w.mass[i] * w.vx[i]; mvy += w.mass[i] * w.vy[i]; mvz += w.mass[i] * w.vz[i];
+  }
+  if (M <= 0) return;
+  for (let i = 0; i < w.n; i++) {
+    w.x[i] -= mx / M; w.y[i] -= my / M; w.z[i] -= mz / M;
+    w.vx[i] -= mvx / M; w.vy[i] -= mvy / M; w.vz[i] -= mvz / M;
+  }
+}
+
+function computeAccelerations(w, softening = 0, use1PN = false, useJ2 = false) {
+  for (let i = 0; i < w.n; i++) { w.ax[i] = 0; w.ay[i] = 0; w.az[i] = 0; }
+  const eps2 = softening * softening;
+
+  // Las particulas del cinturon tienen masa cero: sienten la gravedad pero
+  // no la ejercen. Tratarlas aparte convierte el coste de O(N^2) sobre
+  // miles de cuerpos en O(N * 10), que es lo que permite simular el
+  // cinturon a tiempo real sin perder nada de fisica.
+  const heavy = [];
+  for (let i = 0; i < w.n; i++) if (w.alive[i] && w.mass[i] > 0) heavy.push(i);
+
+  for (const i of heavy) {
+    for (const j of heavy) {
+      if (j <= i) continue;
+      const dx = w.x[j] - w.x[i], dy = w.y[j] - w.y[i], dz = w.z[j] - w.z[i];
+      const r2 = dx * dx + dy * dy + dz * dz + eps2;
+      if (r2 <= 0) continue;
+      const inv = 1 / (r2 * Math.sqrt(r2));
+      const gi = G * w.mass[j] * inv, gj = G * w.mass[i] * inv;
+      w.ax[i] += dx * gi; w.ay[i] += dy * gi; w.az[i] += dz * gi;
+      w.ax[j] -= dx * gj; w.ay[j] -= dy * gj; w.az[j] -= dz * gj;
+    }
+  }
+
+  for (let i = 0; i < w.n; i++) {
+    if (!w.alive[i] || w.mass[i] > 0) continue;
+    for (const j of heavy) {
+      const dx = w.x[j] - w.x[i], dy = w.y[j] - w.y[i], dz = w.z[j] - w.z[i];
+      const r2 = dx * dx + dy * dy + dz * dz + eps2;
+      if (r2 <= 0) continue;
+      const g = G * w.mass[j] / (r2 * Math.sqrt(r2));
+      w.ax[i] += dx * g; w.ay[i] += dy * g; w.az[i] += dz * g;
+    }
+  }
+
+  if (useJ2) {
+    // Achatamiento del Sol: J2 = 2.2e-7. Real, pero mil veces menor que la
+    // correccion relativista. Sirve para ver donde esta el suelo del modelo.
+    let c = 0;
+    for (let i = 0; i < w.n; i++) if (w.alive[i] && w.mass[i] > w.mass[c]) c = i;
+    const J2 = 2.2e-7, R = 0.00465247;
+    for (let i = 0; i < w.n; i++) {
+      if (i === c || !w.alive[i]) continue;
+      const dx = w.x[i] - w.x[c], dy = w.y[i] - w.y[c], dz = w.z[i] - w.z[c];
+      const r2 = dx * dx + dy * dy + dz * dz, r = Math.sqrt(r2);
+      const k = -1.5 * J2 * G * w.mass[c] * R * R / (r2 * r2 * r);
+      const z = 5 * dz * dz / r2;
+      w.ax[i] += k * dx * (1 - z); w.ay[i] += k * dy * (1 - z); w.az[i] += k * dz * (3 - z);
+    }
+  }
+
+  if (!use1PN) return;
+  let c = 0;
+  for (let i = 0; i < w.n; i++) if (w.alive[i] && w.mass[i] > w.mass[c]) c = i;
+  const c2 = C_LIGHT * C_LIGHT, mu = G * w.mass[c];
+  for (let i = 0; i < w.n; i++) {
+    if (i === c || !w.alive[i] || w.mass[i] > 1e-3 * w.mass[c]) continue;
+    const rx = w.x[i] - w.x[c], ry = w.y[i] - w.y[c], rz = w.z[i] - w.z[c];
+    const ux = w.vx[i] - w.vx[c], uy = w.vy[i] - w.vy[c], uz = w.vz[i] - w.vz[c];
+    const r = Math.hypot(rx, ry, rz);
+    const v2 = ux * ux + uy * uy + uz * uz, rv = rx * ux + ry * uy + rz * uz;
+    const pre = mu / (c2 * r * r * r), k1 = pre * (4 * mu / r - v2), k2 = pre * 4 * rv;
+    w.ax[i] += rx * k1 + ux * k2;
+    w.ay[i] += ry * k1 + uy * k2;
+    w.az[i] += rz * k1 + uz * k2;
+  }
+}
+
+function verlet(w, dt, soft, pn, j2) {
+  for (let i = 0; i < w.n; i++) {
+    if (!w.alive[i]) continue;
+    w.vx[i] += w.ax[i] * dt * 0.5; w.vy[i] += w.ay[i] * dt * 0.5; w.vz[i] += w.az[i] * dt * 0.5;
+    w.x[i] += w.vx[i] * dt; w.y[i] += w.vy[i] * dt; w.z[i] += w.vz[i] * dt;
+  }
+  computeAccelerations(w, soft, pn, j2);
+  for (let i = 0; i < w.n; i++) {
+    if (!w.alive[i]) continue;
+    w.vx[i] += w.ax[i] * dt * 0.5; w.vy[i] += w.ay[i] * dt * 0.5; w.vz[i] += w.az[i] * dt * 0.5;
+  }
+  w.time += dt;
+}
+
+function euler(w, dt, soft, pn, j2) {
+  computeAccelerations(w, soft, pn, j2);
+  for (let i = 0; i < w.n; i++) {
+    if (!w.alive[i]) continue;
+    w.x[i] += w.vx[i] * dt; w.y[i] += w.vy[i] * dt; w.z[i] += w.vz[i] * dt;
+    w.vx[i] += w.ax[i] * dt; w.vy[i] += w.ay[i] * dt; w.vz[i] += w.az[i] * dt;
+  }
+  w.time += dt;
+}
+
+const CBRT2 = Math.cbrt(2), W1 = 1 / (2 - CBRT2), W0 = -CBRT2 * W1;
+
+// Escala de tiempo dinamica: el menor de dos tiempos caracteristicos
+// sobre los cuerpos con masa. El primero es el tiempo en que la gravedad
+// cambia apreciablemente la velocidad; el segundo, el tiempo de caida
+// libre entre los dos cuerpos mas proximos. eta = 0.02 deja unos 300
+// pasos por orbita, que es lo que Verlet necesita para no derivar.
+function safeStep(w, eta = 0.02) {
+  let dt = Infinity;
+  const heavy = [];
+  for (let i = 0; i < w.n; i++) if (w.alive[i] && w.mass[i] > 0) heavy.push(i);
+  for (const i of heavy) {
+    const a = Math.hypot(w.ax[i], w.ay[i], w.az[i]);
+    const v = Math.hypot(w.vx[i], w.vy[i], w.vz[i]);
+    if (a > 0 && v > 0) dt = Math.min(dt, eta * v / a);
+    for (const j of heavy) {
+      if (j <= i) continue;
+      const r = Math.hypot(w.x[j] - w.x[i], w.y[j] - w.y[i], w.z[j] - w.z[i]);
+      const m = w.mass[i] + w.mass[j];
+      if (r > 0 && m > 0) dt = Math.min(dt, eta * Math.sqrt(r * r * r / (G * m)));
+    }
+  }
+  return Number.isFinite(dt) && dt > 0 ? dt : 1e-6;
+}
+
+// Avanza dtTarget subdividiendolo en tantos pasos como haga falta.
+// Devuelve cuantos subpasos ha usado; el limite superior garantiza que
+// un fotograma nunca puede colgar el navegador: si el encuentro es tan
+// violento que no cabe en el presupuesto, la simulacion se ralentiza en
+// vez de explotar.
+function stepAdaptive(w, dtTarget, method, soft, pn, j2, budget = 3000) {
+  let left = dtTarget, used = 0;
+  while (left > dtTarget * 1e-9 && used < budget) {
+    const h = Math.min(left, safeStep(w));
+    step(w, h, method, soft, pn, j2);
+    left -= h; used++;
+  }
+  return used;
+}
+
+// Red de seguridad: si algo se va a NaN o a infinito, el cuerpo se retira
+// en vez de contaminar todo el estado. Sin esto un solo NaN se propaga por
+// las aceleraciones a todos los demas en un unico paso.
+function sanitize(w) {
+  let removed = 0;
+  for (let i = 0; i < w.n; i++) {
+    if (!w.alive[i]) continue;
+    const ok = Number.isFinite(w.x[i]) && Number.isFinite(w.y[i]) &&
+               Number.isFinite(w.z[i]) && Number.isFinite(w.vx[i]) &&
+               Number.isFinite(w.vy[i]) && Number.isFinite(w.vz[i]);
+    const far = Math.hypot(w.x[i], w.y[i], w.z[i]) > 1e5;
+    if (!ok || far) { w.alive[i] = false; removed++; }
+  }
+  return removed;
+}
+
+function step(w, dt, method, soft = 0, pn = false, j2 = false) {
+  if (method === "euler") return euler(w, dt, soft, pn, j2);
+  if (method === "verlet") return verlet(w, dt, soft, pn, j2);
+  // yoshida4: tres pasos de verlet, el central con signo negativo
+  const t0 = w.time;
+  verlet(w, W1 * dt, soft, pn, j2);
+  verlet(w, W0 * dt, soft, pn, j2);
+  verlet(w, W1 * dt, soft, pn, j2);
+  w.time = t0 + dt;
+}
+
+function diagnostics(w) {
+  let ke = 0, pe = 0, lx = 0, ly = 0, lz = 0;
+  for (let i = 0; i < w.n; i++) {
+    if (!w.alive[i]) continue;
+    const v2 = w.vx[i] ** 2 + w.vy[i] ** 2 + w.vz[i] ** 2;
+    ke += 0.5 * w.mass[i] * v2;
+    lx += w.mass[i] * (w.y[i] * w.vz[i] - w.z[i] * w.vy[i]);
+    ly += w.mass[i] * (w.z[i] * w.vx[i] - w.x[i] * w.vz[i]);
+    lz += w.mass[i] * (w.x[i] * w.vy[i] - w.y[i] * w.vx[i]);
+    for (let j = i + 1; j < w.n; j++) {
+      if (!w.alive[j]) continue;
+      const r = Math.hypot(w.x[j] - w.x[i], w.y[j] - w.y[i], w.z[j] - w.z[i]);
+      if (r > 0) pe -= G * w.mass[i] * w.mass[j] / r;
+    }
+  }
+  return { ke, pe, total: ke + pe, L: Math.hypot(lx, ly, lz) };
+}
+
+// --- Agujero negro ---
+const schwarzschildRadius = (m) => 2 * G * m / (C_LIGHT * C_LIGHT);
+
+function captureRadius(m, v) {
+  const rs = schwarzschildRadius(m);
+  if (v <= 0) return rs;
+  return rs * Math.sqrt(1 + 2 * G * m / (rs * v * v));
+}
+
+function processCaptures(w, h) {
+  if (!w.alive[h]) return [];
+  const eaten = [];
+  for (let i = 0; i < w.n; i++) {
+    if (i === h || !w.alive[i]) continue;
+    const d = Math.hypot(w.x[i] - w.x[h], w.y[i] - w.y[h], w.z[i] - w.z[h]);
+    const dv = Math.hypot(w.vx[i] - w.vx[h], w.vy[i] - w.vy[h], w.vz[i] - w.vz[h]);
+    if (d > captureRadius(w.mass[h], dv)) continue;
+    const M = w.mass[h] + w.mass[i];
+    w.vx[h] = (w.vx[h] * w.mass[h] + w.vx[i] * w.mass[i]) / M;
+    w.vy[h] = (w.vy[h] * w.mass[h] + w.vy[i] * w.mass[i]) / M;
+    w.vz[h] = (w.vz[h] * w.mass[h] + w.vz[i] * w.mass[i]) / M;
+    w.mass[h] = M;
+    w.alive[i] = false;
+    eaten.push(w.name[i]);
+  }
+  return eaten;
+}
+
+// Planetas enanos, asteroides mayores y cometas periodicos.
+// Aqui la excentricidad deja de ser un detalle: Halley tiene e = 0.967.
+const MINOR = [
+  ["Ceres",    4.7191e-10,  2.76580, 0.07850, 10.593, 231.360, 153.990,  80.393, "#8d8478", 1.6],
+  ["Palas",    1.0300e-10,  2.77270, 0.23130, 34.840, 182.200, 123.130, 173.080, "#8d8478", 1.4],
+  ["Vesta",    1.3000e-10,  2.36170, 0.08890,  7.140,  64.400, 255.010, 103.810, "#a49a8b", 1.4],
+  ["Quiron",   0,          13.65000, 0.38230,  6.930, 306.800, 188.800, 209.300, "#7fa8a0", 1.3],
+  ["Pluton",   6.5500e-9,  39.48212, 0.24883, 17.160, 238.660, 224.130, 110.299, "#c4a98a", 2.0],
+  ["Haumea",   2.0100e-9,  43.13000, 0.19100, 28.210, 219.700,   1.300, 122.100, "#b9b3ad", 1.6],
+  ["Makemake", 1.5500e-9,  45.43000, 0.15900, 29.000, 176.300,  15.800,  79.400, "#b98d72", 1.6],
+  ["Eris",     8.3400e-9,  67.78000, 0.44070, 44.040,  33.580, 187.590,  35.950, "#d5d2cc", 1.8],
+  ["Halley",   0,          17.83400, 0.96714,162.260, 235.750, 169.750,  58.420, "#79d2c0", 1.5],
+  ["Encke",    0,           2.21550, 0.84850, 11.780,   1.070, 161.070, 334.570, "#79d2c0", 1.3],
+];
+
+function addMinorBodies(w) {
+  for (const [name, mass, a, e, i, L, peri, node, color, rad] of MINOR) {
+    const [p, v] = stateFromElements(a, e, i, L, peri, node, mass);
+    add(w, name, mass, p, v, color, rad, mass > 0 ? "planet" : "comet");
+  }
+}
+
+// Cinturon principal: particulas de prueba entre 2.1 y 3.3 UA.
+// Masa cero, asi que no perturban a los planetas ni entre si.
+function addBelt(w, count) {
+  let seed = 12345;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  for (let k = 0; k < count; k++) {
+    const a = 2.1 + rnd() * 1.2;
+    const e = rnd() * 0.12;
+    const inc = (rnd() - 0.5) * 0.35;
+    const th = rnd() * 2 * Math.PI;
+    const r = a * (1 - e);
+    const v = Math.sqrt(G * (1 + 9.5e-4) * (2 / r - 1 / a));
+    add(w, "asteroide", 0,
+        [r * Math.cos(th), r * Math.sin(th) * Math.cos(inc), r * Math.sin(th) * Math.sin(inc)],
+        [-v * Math.sin(th), v * Math.cos(th) * Math.cos(inc), v * Math.cos(th) * Math.sin(inc)],
+        "#7d8794", 1, "belt");
+  }
+}
+
+// Elementos orbitales osculadores respecto al Sol.
+// El vector de Laplace-Runge-Lenz apunta al perihelio y su modulo es la
+// excentricidad. Con el y con el momento angular se reconstruye la elipse
+// exacta que el cuerpo esta recorriendo en ese instante.
+function elements(w, i, c = 0) {
+  const rx = w.x[i] - w.x[c], ry = w.y[i] - w.y[c], rz = w.z[i] - w.z[c];
+  const vx = w.vx[i] - w.vx[c], vy = w.vy[i] - w.vy[c], vz = w.vz[i] - w.vz[c];
+  const r = Math.hypot(rx, ry, rz), mu = G * (w.mass[c] + w.mass[i]);
+  const hx = ry * vz - rz * vy, hy = rz * vx - rx * vz, hz = rx * vy - ry * vx;
+  // e_vec = (v x h)/mu - r_hat
+  const ex = (vy * hz - vz * hy) / mu - rx / r;
+  const ey = (vz * hx - vx * hz) / mu - ry / r;
+  const ez = (vx * hy - vy * hx) / mu - rz / r;
+  const e = Math.hypot(ex, ey, ez);
+  const v2 = vx * vx + vy * vy + vz * vz;
+  const a = 1 / (2 / r - v2 / mu);
+  return { a, e, ex, ey, ez, hx, hy, hz };
+}
+
+// Radio de marea: distancia a la que la diferencia de gravedad entre las
+// dos caras de un cuerpo supera su propia cohesion gravitatoria.
+// d = R * (2M/m)^(1/3). Dentro de esa distancia el cuerpo se desgarra.
+function tidalRadius(holeMass, bodyMass, bodyRadius) {
+  if (bodyMass <= 0 || bodyRadius <= 0) return 0;
+  return bodyRadius * Math.cbrt(2 * holeMass / bodyMass);
+}
+
+// Velocidad de escape a una distancia dada. En r = r_s vale exactamente c:
+// esa es la definicion del horizonte de sucesos.
+const escapeSpeed = (mass, r) => Math.sqrt(2 * G * mass / r);
+
+// Modulo de la aceleracion que el cuerpo h ejerce sobre el cuerpo i.
+function pullOn(w, h, i) {
+  const r = Math.hypot(w.x[i] - w.x[h], w.y[i] - w.y[h], w.z[i] - w.z[h]);
+  return r > 0 ? { a: G * w.mass[h] / (r * r), r } : { a: Infinity, r: 0 };
+}
+
+// Radio de Hill del agujero frente al Sol: hasta donde manda el.
+const hillRadius = (m, M, d) => d * Math.cbrt(m / (3 * M));
+
+// Energia orbital respecto al Sol. Positiva = eyectado del sistema.
+function orbitalEnergy(w, i, sun = 0) {
+  const r = Math.hypot(w.x[i] - w.x[sun], w.y[i] - w.y[sun], w.z[i] - w.z[sun]);
+  const v2 = (w.vx[i] - w.vx[sun]) ** 2 + (w.vy[i] - w.vy[sun]) ** 2 + (w.vz[i] - w.vz[sun]) ** 2;
+  return 0.5 * v2 - G * w.mass[sun] / r;
+}
+
+// Espacio de nombres equivalente al modulo original.
+const P = { G, C_LIGHT, ARCSEC_PER_RADIAN, makeSolarSystem, add, toBarycentric,
+            computeAccelerations, step, diagnostics, schwarzschildRadius,
+            captureRadius, processCaptures, orbitalEnergy, addBelt, addMinorBodies, elements, tidalRadius, escapeSpeed, pullOn, hillRadius, stepAdaptive, sanitize, safeStep };
+
+
+const NOTES = {
+  "Sol": ["Estrella G2V", "Contiene el 99.86% de la masa del sistema. Todo lo demás son restos. Aun así no está quieto: el baricentro del sistema cae a veces fuera de su superficie, arrastrado sobre todo por Júpiter."],
+  "Mercurio": ["El planeta que rompió a Newton", "Su perihelio avanza 43 segundos de arco por siglo más de lo que predice la gravedad newtoniana. Durante 56 años se buscó un planeta oculto que lo explicara. La respuesta fue que la gravedad no era lo que creíamos. Activa la corrección 1PN y verás aparecer esos 43 segundos."],
+  "Venus": ["La órbita más circular", "Excentricidad 0.0068: su distancia al Sol apenas varía. Gira sobre sí mismo al revés que los demás y más despacio de lo que tarda en dar la vuelta al Sol."],
+  "Tierra": ["Aquí está el observador", "En esta simulación la Tierra y la Luna van juntas como un solo cuerpo en el baricentro del par. Separarlas exigiría un paso de tiempo mucho menor: la Luna orbita en 27 días."],
+  "Marte": ["El que delató la elipse", "Kepler pasó años ajustando círculos a las observaciones de Marte de Tycho Brahe. No encajaban por ocho minutos de arco. Esa discrepancia le hizo abandonar el círculo y encontrar la elipse."],
+  "Júpiter": ["El que manda después del Sol", "Dos tercios de toda la masa que no es el Sol. Es el responsable principal de las perturbaciones que hacen precesar las órbitas de los demás, incluida la de Mercurio."],
+  "Saturno": ["Resonancia con Júpiter", "Da casi exactamente dos vueltas por cada cinco de Júpiter. Esa casi-resonancia genera perturbaciones acumulativas que tardan siglos en manifestarse y que este simulador reproduce si lo dejas correr."],
+  "Urano": ["Descubierto por sus desviaciones", "Su órbita no cuadraba con las predicciones. De esa discrepancia se dedujo Neptuno con lápiz y papel, y se encontró donde decían los cálculos. El mismo método aplicado a Mercurio falló, y ahí empezó el problema."],
+  "Neptuno": ["Predicho antes que observado", "Le Verrier calculó su posición en 1846 a partir de las anomalías de Urano. Fue encontrado la primera noche que se miró. Alentado por el éxito, propuso otro planeta para explicar Mercurio. Ese nunca existió."],
+  "Plutón": ["Resonancia 3:2 con Neptuno", "Da dos vueltas por cada tres de Neptuno, y eso es lo que impide que choquen pese a que sus órbitas se cruzan. Excentricidad 0.249 e inclinación 17°: entre 1979 y 1999 estuvo más cerca del Sol que Neptuno."],
+  "Halley": ["La elipse que sí se ve", "Excentricidad 0.967. Su órbita es un 75% más plana que una circunferencia. Pasa a 0.59 UA del Sol, dentro de la órbita de Venus, y se aleja hasta 35 UA, más allá de Neptuno. Además va en sentido retrógrado: inclinación 162°."],
+  "Encke": ["El período más corto conocido", "3.3 años. Excentricidad 0.849. Ha pasado tantas veces cerca del Sol que ya casi no forma cola."],
+  "Eris": ["El que degradó a Plutón", "Más masivo que Plutón. Su descubrimiento en 2005 obligó a decidir qué es un planeta, y la respuesta dejó fuera a los dos. Excentricidad 0.44, inclinación 44°."],
+  "Ceres": ["El mayor del cinturón", "Un tercio de toda la masa del cinturón principal, y aun así 6000 veces menos masivo que la Tierra. El cinturón no es un planeta que explotó: nunca llegó a formarse, porque Júpiter no le dejó."],
+  "Quirón": ["Ni asteroide ni cometa", "Orbita entre Saturno y Urano y desarrolla coma como un cometa. Su órbita es inestable a escala de un millón de años: acabará expulsado o estrellado."],
+  "Estrella de paso": ["Lo que de verdad destruye sistemas", "Un encuentro estelar cercano es mucho más probable que uno con un agujero negro, y hace el mismo daño. A 250 UA ya basta para desestabilizar las órbitas exteriores."],
+  "Agujero negro": ["Horizonte de 30 km", "Con 10 masas solares el horizonte mide 2·10⁻⁷ UA: a esta escala es un punto matemático. No se traga el sistema solar. Lo destruye desordenando las órbitas hasta que los planetas salen despedidos. Lo que ves dibujado está ampliado."],
+};
+
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+let W = 0, H = 0;
+
+function resize() {
+  const r = window.devicePixelRatio || 1;
+  W = cv.clientWidth || window.innerWidth;
+  H = cv.clientHeight || window.innerHeight;
+  cv.width = W * r; cv.height = H * r;
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  if (!userZoomed) fitToSystem();
+}
+
+// Encaja los 30 UA de Neptuno en el espacio libre a la derecha de la barra.
+function fitToSystem() {
+  const availW = Math.max(200, W - 268 - 60);
+  const availH = Math.max(200, H - 120);
+  scale = Math.min(availW / 2, availH / 2) / 31;
+}
+addEventListener("resize", resize);
+
+let world, e0, bh = -1, running = true;
+let scale = 22, camX = 0, camY = 0, userZoomed = false;
+const state = { method: "yoshida4", dt: 0.5, speed: 40, pn: false,
+                trails: true, log: false, bhMass: 10, bhScale: 1e6, tilt: 0, belt: false, starNames: true, substeps: 0, throttled: false, diverged: 0, minor: true, orbits: true, j2: false,
+                tampered: false, selected: -1, ejected: new Set(), eaten: [] };
+
+function reset() {
+  world = P.makeSolarSystem({ minor: state.minor, belt: state.belt ? 700 : 0 });
+  P.computeAccelerations(world, 0, state.pn, state.j2);
+  e0 = P.diagnostics(world).total;
+  bh = -1;
+  state.tampered = false; state.selected = -1;
+  state.ejected.clear(); state.eaten = [];
+  state.throttled = false; state.diverged = 0; state.substeps = 0;
+  info.hidden = true;
+}
+
+function dropBlackHole() {
+  if (bh >= 0) return;
+  // Llega desde fuera con una velocidad tipica de estrella del disco.
+  bh = P.add(world, "Agujero negro", state.bhMass, [-100, 18, 0], [0.018, 0, 0],
+             "#000000", 9, "blackhole");
+  P.computeAccelerations(world, 0, state.pn, state.j2);
+  state.tampered = true;
+}
+
+// --- proyeccion ---
+const project = (x, y, z = 0) => {
+  // Inclinacion de camara: giro alrededor del eje X. Con tilt = 0 se mira
+  // la ecliptica desde arriba; al inclinar se ven las inclinaciones reales
+  // de las orbitas, que en la vista cenital quedan escondidas.
+  const ct = Math.cos(state.tilt), st = Math.sin(state.tilt);
+  let yy = y * ct - z * st;
+  if (!state.log) return [W / 2 + 134 + (x - camX) * scale, H / 2 + (yy - camY) * scale];
+  const r = Math.hypot(x, yy) || 1e-9;
+  const k = Math.log10(1 + r * 9) / r * scale * 3.4;
+  return [W / 2 + 134 + (x * k - camX * scale), H / 2 + (yy * k - camY * scale)];
+};
+
+// Estrellas reales: ascension recta (horas), declinacion (grados),
+// magnitud visual y color segun tipo espectral. Coordenadas J2000.
+// El color no es decorativo: refleja la temperatura superficial. Las
+// azules rondan los 20000 K, las rojas los 3500 K.
+const STARS = [
+  ["Sirio",        6.752, -16.716, -1.46, "#a9c9ff"],
+  ["Canopus",      6.399, -52.696, -0.74, "#f8f7ff"],
+  ["Alfa Centauri",14.660, -60.833, -0.27, "#fff4e8"],
+  ["Arturo",      14.261,  19.182, -0.05, "#ffcf8a"],
+  ["Vega",        18.615,  38.784,  0.03, "#cfe0ff"],
+  ["Capella",      5.278,  45.998,  0.08, "#ffe9b0"],
+  ["Rigel",        5.242,  -8.202,  0.13, "#bcd4ff"],
+  ["Procyon",      7.655,   5.225,  0.34, "#fff5e0"],
+  ["Achernar",     1.629, -57.237,  0.46, "#b8d0ff"],
+  ["Betelgeuse",   5.919,   7.407,  0.50, "#ff9a5c"],
+  ["Hadar",       14.064, -60.373,  0.61, "#b7cdff"],
+  ["Altair",      19.846,   8.868,  0.77, "#f3f4ff"],
+  ["Acrux",       12.443, -63.099,  0.77, "#b6ccff"],
+  ["Aldebarán",    4.599,  16.509,  0.85, "#ffb066"],
+  ["Espiga",      13.420, -11.161,  1.04, "#b2c9ff"],
+  ["Antares",     16.490, -26.432,  1.09, "#ff8f5a"],
+  ["Pólux",        7.755,  28.026,  1.14, "#ffcf90"],
+  ["Fomalhaut",   22.961, -29.622,  1.16, "#dfe8ff"],
+  ["Deneb",       20.690,  45.280,  1.25, "#eaf0ff"],
+  ["Régulo",      10.140,  11.967,  1.35, "#c3d6ff"],
+  ["Cástor",       7.577,  31.888,  1.58, "#dfe9ff"],
+  ["Bellatrix",    5.418,   6.350,  1.64, "#b9d1ff"],
+  ["Alkaid",      13.792,  49.313,  1.85, "#c9dbff"],
+  ["Alioth",      12.900,  55.960,  1.77, "#dbe6ff"],
+  ["Dubhe",       11.062,  61.751,  1.79, "#ffd79c"],
+  ["Mizar",       13.399,  54.925,  2.23, "#dbe6ff"],
+  ["Merak",       11.031,  56.382,  2.37, "#dfe9ff"],
+  ["Polaris",      2.530,  89.264,  1.98, "#ffe6c0"],
+];
+
+// Relleno de estrellas debiles, deterministas, para que el cielo no quede
+// vacio. Estas si son inventadas y no llevan nombre.
+const FILLER = (() => {
+  let s = 987654321;
+  const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  return Array.from({ length: 340 }, () => [rnd() * 24, rnd() * 180 - 90, 3 + rnd() * 3]);
+})();
+
+// Proyeccion equirectangular del cielo: ascension recta al eje horizontal,
+// declinacion al vertical. Es un mapa del cielo de fondo, no una vista
+// desde dentro del sistema: los planetas se dibujan sobre el, no en el.
+function skyToScreen(raH, decDeg) {
+  const x = 268 + ((24 - raH) / 24) * (W - 268);
+  const y = (0.5 - decDeg / 180) * H;
+  return [x, y];
+}
+
+// El brillo aparente sigue la escala de magnitudes: cada 5 magnitudes es
+// un factor 100 en flujo, asi que brillo ~ 10^(-0.4*m).
+const magToAlpha = (m) => Math.min(1, Math.pow(10, -0.4 * (m - 1.2)) * 0.5 + 0.12);
+
+function drawStarfield() {
+  for (const [ra, dec, m] of FILLER) {
+    const [x, y] = skyToScreen(ra, dec);
+    ctx.fillStyle = `rgba(198,212,236,${magToAlpha(m) * 0.55})`;
+    ctx.fillRect(x, y, 1, 1);
+  }
+  for (const [name, ra, dec, mag, color] of STARS) {
+    const [x, y] = skyToScreen(ra, dec);
+    const r = Math.max(0.9, 2.6 - mag * 0.45);
+    ctx.globalAlpha = magToAlpha(mag);
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+    if (mag < 1.3 || name === "Polaris") {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+      g.addColorStop(0, color + "66"); g.addColorStop(1, color + "00");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r * 4, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (state.starNames && (mag < 1.3 || name === "Polaris")) {
+      ctx.fillStyle = "#54606f";
+      ctx.font = "10px Inter, Segoe UI, system-ui, sans-serif";
+      ctx.fillText(name, x + 5, y + 3);
+    }
+  }
+}
+
+// Traza la elipse osculadora completa a partir de los elementos.
+// La base es: unitario al perihelio, y el perpendicular dentro del plano.
+function drawOrbit(i, color, alpha) {
+  const el = elements(world, i, 0);
+  if (!(el.a > 0) || el.e >= 1) return;   // trayectoria abierta: no hay elipse
+  const en = Math.hypot(el.ex, el.ey, el.ez) || 1e-12;
+  const px_ = el.ex / en, py_ = el.ey / en, pz_ = el.ez / en;
+  const hn = Math.hypot(el.hx, el.hy, el.hz) || 1e-12;
+  const hx = el.hx / hn, hy = el.hy / hn, hz = el.hz / hn;
+  const qx = hy * pz_ - hz * py_, qy = hz * px_ - hx * pz_, qz = hx * py_ - hy * px_;
+  const p = el.a * (1 - el.e * el.e);
+
+  ctx.strokeStyle = color + alpha;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let k = 0; k <= 180; k++) {
+    const th = k * Math.PI / 90;
+    const r = p / (1 + el.e * Math.cos(th));
+    const c = Math.cos(th), s = Math.sin(th);
+    const [sx, sy] = project(world.x[0] + r * (px_ * c + qx * s),
+                             world.y[0] + r * (py_ * c + qy * s),
+                             world.z[0] + r * (pz_ * c + qz * s));
+    k ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
+  }
+  ctx.stroke();
+
+  if (el.e > 0.05 && i === state.selected) {
+    // Perihelio y afelio: los dos extremos del eje mayor.
+    for (const [th, col] of [[0, "#e0a53c"], [Math.PI, "#5b9bd5"]]) {
+      const r = p / (1 + el.e * Math.cos(th));
+      const c = Math.cos(th), s = Math.sin(th);
+      const [sx, sy] = project(world.x[0] + r * (px_ * c + qx * s),
+                               world.y[0] + r * (py_ * c + qy * s),
+                               world.z[0] + r * (pz_ * c + qz * s));
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(sx, sy, 2.6, 0, 6.2832); ctx.fill();
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = "#080b12";
+  ctx.fillRect(0, 0, W, H);
+  drawStarfield();
+
+  if (state.orbits) {
+    for (let i = 1; i < world.n; i++) {
+      if (!world.alive[i] || world.kind[i] === "belt") continue;
+      drawOrbit(i, world.color[i], i === state.selected ? "88" : "33");
+    }
+  }
+
+  if (state.trails) {
+    for (let i = 0; i < world.n; i++) {
+      const t = world.trail[i];
+      if (!world.alive[i] || t.length < 2 || world.kind[i] === "belt") continue;
+      ctx.strokeStyle = world.color[i] + "44";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let k = 0; k < t.length; k += 2) {
+        const [px, py] = project(t[k], t[k + 1]);
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    }
+  }
+
+  for (let i = 0; i < world.n; i++) {
+    if (!world.alive[i]) continue;
+    const [px, py] = project(world.x[i], world.y[i], world.z[i]);
+    if (px < -60 || px > W + 60 || py < -60 || py > H + 60) continue;
+
+    if (world.kind[i] === "blackhole") {
+      const rs = P.schwarzschildRadius(world.mass[i]) * state.bhScale * scale;
+      const r = Math.max(rs, 3);
+      const g = ctx.createRadialGradient(px, py, r, px, py, r * 4.5);
+      g.addColorStop(0, "rgba(255,190,90,.55)");
+      g.addColorStop(1, "rgba(255,190,90,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(px, py, r * 4.5, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = "#000";
+      ctx.beginPath(); ctx.arc(px, py, r, 0, 6.2832); ctx.fill();
+      ctx.strokeStyle = "#e0a53c"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(px, py, r, 0, 6.2832); ctx.stroke();
+    } else if (world.kind[i] === "belt") {
+      ctx.fillStyle = "#6a7382";
+      ctx.fillRect(px, py, 1.4, 1.4);
+      continue;
+    } else {
+      const r = world.drawRadius[i];
+      if (world.name[i] === "Saturno") {
+        // Anillos: elipse achatada por la inclinacion de la camara.
+        ctx.strokeStyle = "#cfc49a99"; ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.ellipse(px, py, r * 2.1, r * 2.1 * Math.cos(state.tilt) * 0.42 + 0.6,
+                    0, 0, 6.2832);
+        ctx.stroke();
+      }
+      if (world.kind[i] === "star") {
+        const g = ctx.createRadialGradient(px, py, r * 0.4, px, py, r * 3.2);
+        g.addColorStop(0, "rgba(255,220,130,.55)");
+        g.addColorStop(1, "rgba(255,210,74,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(px, py, r * 3.2, 0, 6.2832); ctx.fill();
+        ctx.fillStyle = world.color[i];
+      } else {
+        // Iluminados desde el Sol: el terminador es real, no decoracion.
+        const [sx, sy] = project(world.x[0], world.y[0], world.z[0]);
+        const d = Math.hypot(px - sx, py - sy) || 1;
+        const g = ctx.createRadialGradient(
+          px - (px - sx) / d * r * 0.55, py - (py - sy) / d * r * 0.55, r * 0.1,
+          px, py, r * 1.15);
+        g.addColorStop(0, world.color[i]);
+        g.addColorStop(1, "#10131c");
+        ctx.fillStyle = g;
+      }
+      ctx.beginPath(); ctx.arc(px, py, r, 0, 6.2832); ctx.fill();
+      if (state.ejected.has(i)) {
+        ctx.strokeStyle = "#e0a53c"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(px, py, r + 5, 0, 6.2832); ctx.stroke();
+      }
+    }
+    if (world.kind[i] === "planet" || world.kind[i] === "star") {
+      const [sx, sy] = project(world.x[0], world.y[0], world.z[0]);
+      if (i === 0 || Math.hypot(px - sx, py - sy) > 26) {
+        ctx.fillStyle = "#7c8798";
+        ctx.font = "11px Inter, Segoe UI, system-ui, sans-serif";
+        ctx.fillText(world.name[i], px + world.drawRadius[i] + 5, py + 3.5);
+      }
+    }
+    if (i === state.selected) {
+      ctx.strokeStyle = "#cdd6e3"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(px, py, world.drawRadius[i] + 8, 0, 6.2832); ctx.stroke();
+    }
+  }
+}
+
+function physics() {
+  if (!running) return;
+  const t0 = performance.now();
+  state.substeps = 0;
+  for (let s = 0; s < state.speed; s++) {
+    // El paso que pides es un objetivo, no una orden: si la dinamica exige
+    // menos, se subdivide. Por eso ya no explota al subir la velocidad.
+    state.substeps += P.stepAdaptive(world, state.dt, state.method, 0,
+                                     state.pn, state.j2);
+    if (bh >= 0 && world.alive[bh]) {
+      const eaten = P.processCaptures(world, bh);
+      if (eaten.length) state.eaten.push(...eaten);
+    }
+    // Presupuesto de 12 ms por fotograma: si se agota, se avanza menos
+    // tiempo simulado, pero la pagina sigue respondiendo.
+    if (performance.now() - t0 > 12) { state.throttled = true; break; }
+  }
+  const lost = P.sanitize(world);
+  if (lost) state.diverged += lost;
+  for (let i = 0; i < world.n; i++) {
+    if (!world.alive[i]) continue;
+    if (world.kind[i] !== "belt") {
+      const t = world.trail[i];
+      t.push(world.x[i], world.y[i]);
+      if (t.length > 1400) t.splice(0, 200);
+    }
+    if (i > 0 && world.kind[i] === "planet" && P.orbitalEnergy(world, i) > 0)
+      state.ejected.add(i);
+  }
+}
+
+// --- lectura ---
+const $ = (id) => document.getElementById(id);
+function readout() {
+  $("years").textContent = (world.time / 365.25).toFixed(1);
+  const d = Math.abs((P.diagnostics(world).total - e0) / e0);
+  $("drift").textContent = d.toExponential(1);
+  $("subs").textContent = state.substeps;
+  const parts = [];
+  if (state.throttled) { parts.push("Encuentro cercano: el paso se ha subdividido y el tiempo simulado avanza más despacio."); state.throttled = false; }
+  if (state.diverged) parts.push(`${state.diverged} cuerpo(s) retirados por divergencia numérica.`);
+  if (state.tampered) parts.push("Has introducido masa a mano: la conservación de energía ya no es un test válido.");
+  if (state.ejected.size) parts.push(`${state.ejected.size} planeta(s) con energía orbital positiva: expulsados del sistema.`);
+  if (state.eaten.length) parts.push(`Absorbidos: ${[...new Set(state.eaten)].join(", ")}.`);
+  $("flag").textContent = parts.join(" ");
+
+  if (state.selected >= 0 && world.alive[state.selected]) {
+    const i = state.selected;
+    const r = Math.hypot(world.x[i] - world.x[0], world.y[i] - world.y[0], world.z[i] - world.z[0]);
+    const v = Math.hypot(world.vx[i], world.vy[i], world.vz[i]) * 1.495978707e8 / 86400;
+    $("ir").textContent = r.toFixed(3);
+    $("iv").textContent = v.toFixed(2);
+    if (i > 0) {
+      const el = P.elements(world, i, 0);
+      $("iecc").textContent = el.e.toFixed(4);
+      $("iap").textContent = el.e < 1
+        ? `${(el.a * (1 - el.e)).toFixed(2)} · ${(el.a * (1 + el.e)).toFixed(2)}`
+        : "órbita abierta";
+      $("iba").textContent = el.e < 1 ? Math.sqrt(1 - el.e * el.e).toFixed(5) : "—";
+    } else {
+      $("iecc").textContent = $("iap").textContent = $("iba").textContent = "—";
+    }
+    $("ie").textContent = i === 0 ? "—" :
+      (P.orbitalEnergy(world, i) > 0 ? "positiva (expulsado)" : "ligado");
+  }
+}
+
+// --- interaccion ---
+const info = $("info");
+function fmtAU(v) {
+  const km = v * 1.495978707e8;
+  if (v < 1e-4) return `${km.toFixed(km < 100 ? 1 : 0)} km (${v.toExponential(2)} UA)`;
+  return `${v.toFixed(4)} UA`;
+}
+
+function select(i) {
+  state.selected = i;
+  const key = world.name[i].replace("Jupiter", "Júpiter").replace("Pluton", "Plutón").replace("Quiron", "Quirón");
+  const note = NOTES[key] || NOTES[world.name[i]] || ["", ""];
+  $("iname").textContent = key;
+  $("isub").textContent = note[0];
+  $("itext").textContent = note[1];
+  $("im").textContent = world.mass[i].toExponential(3);
+
+  const isBH = world.kind[i] === "blackhole";
+  $("bhblock").hidden = !isBH;
+  if (isBH) {
+    const M = world.mass[i];
+    const rs = P.schwarzschildRadius(M);
+    const v30 = 30 * 86400 / 1.495978707e8;              // 30 km/s en UA/dia
+    const dSun = Math.hypot(world.x[i] - world.x[0], world.y[i] - world.y[0]);
+    $("brs").textContent = fmtAU(rs);
+    $("brc").textContent = P.captureRadius(M, v30).toExponential(3);
+    $("brt").textContent = P.tidalRadius(M, 3.04043e-6, 4.2635e-5).toExponential(3);
+    $("brh").textContent = P.hillRadius(M, 1.0, dSun).toFixed(2);
+
+    // Sobre que cuerpos tira ya mas que el Sol. Es la forma honesta de
+    // medir su influencia: comparar aceleraciones, no distancias.
+    const stronger = [];
+    for (let k = 1; k < world.n; k++) {
+      if (!world.alive[k] || world.kind[k] === "belt" || k === i) continue;
+      if (P.pullOn(world, i, k).a > P.pullOn(world, 0, k).a) stronger.push(world.name[k]);
+    }
+    $("bpull").textContent = stronger.length
+      ? "Ya tira más que el Sol sobre: " + stronger.join(", ") + "."
+      : "Todavía no domina sobre ningún cuerpo: el Sol tira más sobre todos.";
+  }
+  info.hidden = false;
+}
+$("close").onclick = () => { info.hidden = true; state.selected = -1; };
+
+let drag = null;
+cv.addEventListener("pointerdown", (ev) => {
+  const mx = ev.clientX, my = ev.clientY;
+  let hit = -1, best = 16;
+  for (let i = 0; i < world.n; i++) {
+    if (!world.alive[i] || world.kind[i] === "belt") continue;
+    const [px, py] = project(world.x[i], world.y[i], world.z[i]);
+    const d = Math.hypot(px - mx, py - my);
+    if (d < Math.max(world.drawRadius[i] + 6, best)) { best = d; hit = i; }
+  }
+  if (hit >= 0 && world.kind[hit] === "blackhole") {
+    drag = { mode: "bh" };
+  } else if (hit >= 0) {
+    select(hit); return;
+  } else {
+    drag = { mode: "pan", x: mx, y: my, cx: camX, cy: camY };
+  }
+  cv.classList.add("dragging");
+  cv.setPointerCapture(ev.pointerId);
+});
+cv.addEventListener("pointermove", (ev) => {
+  if (!drag) return;
+  if (drag.mode === "pan") {
+    camX = drag.cx - (ev.clientX - drag.x) / scale;
+    camY = drag.cy - (ev.clientY - drag.y) / scale;
+  } else if (bh >= 0) {
+    world.x[bh] = (ev.clientX - W / 2 - 134) / scale + camX;
+    world.y[bh] = (ev.clientY - H / 2) / scale + camY;
+    world.vx[bh] = world.vy[bh] = world.vz[bh] = 0;
+    state.tampered = true;
+  }
+});
+addEventListener("pointerup", () => { drag = null; cv.classList.remove("dragging"); });
+cv.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  userZoomed = true;
+  scale *= ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+  scale = Math.min(4000, Math.max(0.4, scale));
+}, { passive: false });
+
+// --- controles ---
+document.querySelectorAll("#method button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("#method button").forEach((o) => o.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    state.method = b.dataset.m;
+  };
+});
+$("dt").oninput = (e) => { state.dt = 10 ** (+e.target.value); $("dtv").textContent = state.dt.toFixed(2); };
+$("speed").oninput = (e) => { state.speed = +e.target.value; $("spv").textContent = state.speed; };
+$("pn").onchange = (e) => { state.pn = e.target.checked; };
+$("trails").onchange = (e) => { state.trails = e.target.checked; };
+$("logscale").onchange = (e) => { state.log = e.target.checked; };
+$("tilt").oninput = (e) => { state.tilt = (+e.target.value) * Math.PI / 180; $("tiltv").textContent = e.target.value; };
+$("orbits").onchange = (e) => { state.orbits = e.target.checked; };
+$("starnames").onchange = (e) => { state.starNames = e.target.checked; };
+$("j2").onchange = (e) => { state.j2 = e.target.checked; };
+$("minor").onchange = (e) => { state.minor = e.target.checked; reset(); };
+$("star").onclick = () => {
+  // Encuentro estelar: una estrella de 1 masa solar cruzando a 250 UA con
+  // 20 km/s. Ocurre de verdad, aunque en escalas de cientos de miles de
+  // anios. Es la forma realista de desmontar un sistema planetario.
+  if (bh >= 0) return;
+  bh = P.add(world, "Estrella de paso", 1.0, [-250, 40, 0], [0.0115, 0, 0],
+             "#ffe08a", 6, "star");
+  P.computeAccelerations(world, 0, state.pn);
+  state.tampered = true;
+};
+$("belt").onchange = (e) => { state.belt = e.target.checked; reset(); };
+$("bhm").oninput = (e) => {
+  state.bhMass = +e.target.value; $("bhmv").textContent = state.bhMass;
+  if (bh >= 0) { world.mass[bh] = state.bhMass; state.tampered = true; }
+};
+$("bhs").oninput = (e) => {
+  state.bhScale = 10 ** (+e.target.value);
+  $("bhsv").textContent = e.target.value === "0" ? "1 (real)" : "10" + "⁰¹²³⁴⁵⁶⁷⁸"[+e.target.value];
+};
+$("drop").onclick = dropBlackHole;
+$("clear").onclick = () => { if (bh >= 0) { world.alive[bh] = false; bh = -1; } };
+$("fit").onclick = () => { userZoomed = false; camX = camY = 0; fitToSystem(); };
+$("pause").onclick = (e) => { running = !running; e.target.textContent = running ? "Pausa" : "Seguir"; };
+$("reset").onclick = () => { reset(); $("pause").textContent = "Pausa"; running = true; };
+
+// --- bucle ---
+resize(); reset();
+let last = 0;
+function frame(t) {
+  physics();
+  draw();
+  if (t - last > 100) { readout(); last = t; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
