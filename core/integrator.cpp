@@ -1,6 +1,9 @@
 #include "integrator.hpp"
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
+#include "units.hpp"
 
 namespace gl {
 
@@ -54,6 +57,59 @@ static void rk4(World& w, double dt, const ForceConfig& cfg) {
     }
     computeAccelerations(w, cfg);
     w.time += dt;
+}
+
+double safeStep(const World& w, double eta) {
+    double dt = std::numeric_limits<double>::infinity();
+    std::vector<std::size_t> heavy;
+    for (std::size_t i = 0; i < w.size(); ++i)
+        if (w.alive[i] && w.mass[i] > 0.0) heavy.push_back(i);
+
+    for (std::size_t k = 0; k < heavy.size(); ++k) {
+        const std::size_t i = heavy[k];
+        const double a = w.acceleration[i].norm();
+        const double v = w.velocity[i].norm();
+        if (a > 0.0 && v > 0.0) dt = std::min(dt, eta * v / a);
+        for (std::size_t l = k + 1; l < heavy.size(); ++l) {
+            const std::size_t j = heavy[l];
+            const double r = (w.position[j] - w.position[i]).norm();
+            const double m = w.mass[i] + w.mass[j];
+            if (r > 0.0 && m > 0.0)
+                dt = std::min(dt, eta * std::sqrt(r * r * r / (G * m)));
+        }
+    }
+    return std::isfinite(dt) && dt > 0.0 ? dt : 1e-6;
+}
+
+std::size_t stepAdaptive(World& w, double dtTarget, Integrator method,
+                         const ForceConfig& cfg, std::size_t budget) {
+    double left = dtTarget;
+    std::size_t used = 0;
+    while (left > dtTarget * 1e-9 && used < budget) {
+        const double h = std::min(left, safeStep(w));
+        step(w, h, method, cfg);
+        left -= h;
+        ++used;
+    }
+    return used;
+}
+
+std::size_t sanitize(World& w, double maxRadius) {
+    std::size_t removed = 0;
+    for (std::size_t i = 0; i < w.size(); ++i) {
+        if (!w.alive[i]) continue;
+        const bool finite = std::isfinite(w.position[i].x) &&
+                            std::isfinite(w.position[i].y) &&
+                            std::isfinite(w.position[i].z) &&
+                            std::isfinite(w.velocity[i].x) &&
+                            std::isfinite(w.velocity[i].y) &&
+                            std::isfinite(w.velocity[i].z);
+        if (!finite || w.position[i].norm() > maxRadius) {
+            w.alive[i] = 0;
+            ++removed;
+        }
+    }
+    return removed;
 }
 
 void step(World& w, double dt, Integrator method, const ForceConfig& cfg) {

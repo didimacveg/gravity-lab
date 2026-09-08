@@ -1,4 +1,5 @@
 #include "blackhole.hpp"
+#include <algorithm>
 #include <cmath>
 #include "units.hpp"
 
@@ -22,8 +23,22 @@ double captureRadius(double holeMass, double relativeSpeed) {
     return rs * std::sqrt(focus);
 }
 
+// Distancia minima de la orbita relativa: el perihelio del encuentro.
+// Con L = |r x v| y E = v^2/2 - mu/r,  e = sqrt(1 + 2 E L^2 / mu^2)
+// y  r_p = (L^2/mu) / (1 + e).
+double pericenterDistance(const Vec3& r, const Vec3& v, double mu) {
+    const double rn = r.norm();
+    if (rn <= 0.0 || mu <= 0.0) return 0.0;
+    const Vec3 L = r.cross(v);
+    const double l2 = L.normSquared();
+    if (l2 <= 0.0) return 0.0;  // caida radial: pasa por el centro
+    const double E = 0.5 * v.normSquared() - mu / rn;
+    const double e = std::sqrt(std::max(0.0, 1.0 + 2.0 * E * l2 / (mu * mu)));
+    return (l2 / mu) / (1.0 + e);
+}
+
 void processCaptures(World& w, std::size_t holeIndex,
-                     const BlackHoleConfig& cfg) {
+                     const BlackHoleConfig& cfg, double minRadius) {
     if (holeIndex >= w.size() || !w.alive[holeIndex]) return;
 
     for (std::size_t i = 0; i < w.size(); ++i) {
@@ -31,10 +46,26 @@ void processCaptures(World& w, std::size_t holeIndex,
 
         const Vec3 d = w.position[i] - w.position[holeIndex];
         const Vec3 dv = w.velocity[i] - w.velocity[holeIndex];
-        const double rc = cfg.useGravitationalFocusing
-                              ? captureRadius(w.mass[holeIndex], dv.norm())
-                              : schwarzschildRadius(w.mass[holeIndex]);
-        if (d.norm() > rc) continue;
+
+        // El criterio correcto no es la distancia actual, sino si la orbita
+        // del encuentro pasa por dentro del radio critico. Comparar la
+        // distancia instantanea falla siempre: entre dos pasos el cuerpo
+        // atraviesa el horizonte y sale por el otro lado sin que nadie lo
+        // vea. Y aplicar la formula de enfoque gravitatorio con la
+        // velocidad local, en vez de con la del infinito, hace que el radio
+        // de captura se encoja justo cuando el cuerpo acelera al caer.
+        //
+        // Radio critico: la ultima orbita circular estable de Schwarzschild,
+        // en 3 r_s. Por dentro de ahi no existe ninguna orbita estable y la
+        // caida al horizonte es inevitable.
+        const double rs = schwarzschildRadius(w.mass[holeIndex]);
+        const double rc = std::max(cfg.useGravitationalFocusing ? 3.0 * rs : rs,
+                                   minRadius);
+        const double mu = G * (w.mass[holeIndex] + w.mass[i]);
+        const double rp = pericenterDistance(d, dv, mu);
+        const bool inbound = d.dot(dv) < 0.0;
+        if (!(rp <= rc && (inbound || d.norm() <= rc))) continue;
+        if (d.norm() > 200.0 * rc) continue;  // aun lejos: ya caera
 
         // Energia antes de la absorcion, para saber cuanta desaparece.
         const double eBefore =

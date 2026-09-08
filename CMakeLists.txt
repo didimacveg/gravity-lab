@@ -32,6 +32,7 @@ add_executable(gl_tests
     tests/test_mercury_precession.cpp
     tests/test_black_hole.cpp
     tests/test_orbits_are_ellipses.cpp
+    tests/test_stability.cpp
 )
 target_link_libraries(gl_tests PRIVATE gl_core)
 
