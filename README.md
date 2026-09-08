@@ -99,7 +99,7 @@ core/       fisica pura, sin dependencias graficas
                   forces incluye tambien el achatamiento solar J2
 app/        ventana nativa con raylib
 web/        simulador.html: fichero unico, misma fisica en JavaScript
-tests/      27 casos de validacion, framework propio de 40 lineas
+tests/      22 casos de validacion, framework propio de 40 lineas
 bench/      corrida headless y grafica de deriva de energia
 ```
 
@@ -121,31 +121,6 @@ Para el simulador interactivo basta con abrir `web/simulador.html` en
 cualquier navegador. Es un fichero unico sin dependencias: no hace falta
 servidor, ni compilar, ni conexion.
 
-## Estabilidad numerica
-
-Con paso de tiempo fijo la simulacion revienta en cuanto hay un encuentro
-cercano: la aceleracion se dispara, la posicion salta a infinito y en pocos
-pasos todo el estado es NaN. Es el fallo clasico de los integradores de
-paso fijo, y hay un test que lo documenta a proposito.
-
-La solucion es subdividir el paso segun la escala de tiempo dinamica local:
-
-    dt = eta * min( |v|/|a| ,  sqrt(r^3 / (G*(m_i+m_j))) )
-
-El primer termino es el tiempo en que la gravedad cambia apreciablemente la
-velocidad; el segundo, el tiempo de caida libre entre los dos cuerpos mas
-proximos. Con eta = 0.02 salen unos 300 pasos por orbita.
-
-Encima de eso hay dos redes de seguridad: un presupuesto maximo de subpasos
-por llamada, para que un encuentro violento ralentice la simulacion en vez
-de colgarla, y una pasada que retira cuerpos cuyo estado ha dejado de ser
-finito, porque un solo NaN contamina a todos los demas a traves de las
-aceleraciones en un unico paso.
-
-Verificado: 240000 pasos objetivo con un agujero negro de 10 masas solares
-atravesando el sistema se resuelven en 714000 subpasos, sin un solo NaN y
-sin perder ningun cuerpo.
-
 ## Limitaciones conocidas
 
 - Paso de tiempo fijo. Un encuentro cercano exige bajarlo a mano.
@@ -157,8 +132,3 @@ sin perder ningun cuerpo.
   del valor de libro.
 - La version web integra en doble precision de JavaScript y usa proyeccion
   ortografica sobre el plano de la ecliptica, no un render 3D completo.
-- El fondo estelar es un mapa equirectangular de 28 estrellas reales con sus
-  coordenadas J2000, magnitudes y colores por tipo espectral, mas relleno
-  sintetico. No rota con la camara: es telon de fondo, no paralaje real.
-- La Luna va incorporada a la Tierra como un solo cuerpo en el baricentro
-  del par.

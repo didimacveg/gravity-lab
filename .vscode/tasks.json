@@ -9,12 +9,7 @@
           "dependsOn": "compilar", "group": { "kind": "test", "isDefault": true } },
         { "label": "benchmark", "type": "shell", "command": "./build/gl_bench",
           "dependsOn": "compilar" },
-        { "label": "subir a github", "type": "shell",
-          "command": "git add -A && git commit -m \"${input:mensaje}\" && git push" },
         { "label": "abrir simulador", "type": "shell",
           "command": "explorer.exe $(wslpath -w web/simulador.html) || xdg-open web/simulador.html" }
-    ],
-    "inputs": [
-        { "id": "mensaje", "type": "promptString", "description": "Mensaje del commit" }
     ]
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include "forces.hpp"
-#include <cstddef>
 #include "state.hpp"
 
 namespace gl {
@@ -19,25 +18,6 @@ enum class Integrator {
 // El paso central es NEGATIVO. Si tu implementacion no retrocede en el tiempo
 // a mitad de paso, esta mal.
 
-void step(World& w, double dt, Integrator method, const ForceConfig& cfg);
-
-// Escala de tiempo dinamica del sistema, en dias. Es el menor de dos
-// tiempos caracteristicos sobre los cuerpos con masa: el tiempo en que la
-// gravedad cambia apreciablemente la velocidad, y el tiempo de caida libre
-// entre los dos cuerpos mas proximos.
-double safeStep(const World& w, double eta = 0.02);
-
-// Avanza dtTarget subdividiendolo segun safeStep. Devuelve el numero de
-// subpasos usados. Con paso fijo, un encuentro cercano dispara la
-// aceleracion y el estado diverge a NaN en unos pocos pasos; esta es la
-// unica forma de que la simulacion sobreviva a un agujero negro pasando
-// cerca. budget acota el trabajo por llamada.
-std::size_t stepAdaptive(World& w, double dtTarget, Integrator method,
-                         const ForceConfig& cfg, std::size_t budget = 100000);
-
-// Retira los cuerpos cuyo estado ha dejado de ser finito o que se han ido
-// mas alla de maxRadius. Devuelve cuantos. Sin esto un solo NaN se propaga
-// a todos los cuerpos a traves de las aceleraciones en un unico paso.
-std::size_t sanitize(World& w, double maxRadius = 1e5);
+void step(World& w, double dt, Integrator method, const ForceConfig& cfg);  // TODO
 
 }  // namespace gl
