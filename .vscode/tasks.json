@@ -1,0 +1,20 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        { "label": "configurar", "type": "shell",
+          "command": "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON" },
+        { "label": "compilar", "type": "shell", "command": "cmake --build build -j",
+          "group": { "kind": "build", "isDefault": true }, "problemMatcher": "$gcc" },
+        { "label": "tests", "type": "shell", "command": "./build/gl_tests",
+          "dependsOn": "compilar", "group": { "kind": "test", "isDefault": true } },
+        { "label": "benchmark", "type": "shell", "command": "./build/gl_bench",
+          "dependsOn": "compilar" },
+        { "label": "subir a github", "type": "shell",
+          "command": "git add -A && git commit -m \"${input:mensaje}\" && git push" },
+        { "label": "abrir simulador", "type": "shell",
+          "command": "explorer.exe $(wslpath -w web/simulador.html) || xdg-open web/simulador.html" }
+    ],
+    "inputs": [
+        { "id": "mensaje", "type": "promptString", "description": "Mensaje del commit" }
+    ]
+}
