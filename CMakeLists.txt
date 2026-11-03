@@ -41,6 +41,10 @@ target_link_libraries(gl_tests PRIVATE gl_core)
 add_executable(gl_bench bench/main.cpp)
 target_link_libraries(gl_bench PRIVATE gl_core)
 
+# --- Error frente al paso de integracion (graficas del README) ---
+add_executable(gl_convergence bench/convergence.cpp)
+target_link_libraries(gl_convergence PRIVATE gl_core)
+
 # --- Aplicacion grafica (opcional: solo si raylib esta instalado) ---
 find_package(raylib QUIET)
 if(raylib_FOUND)
