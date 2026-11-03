@@ -132,7 +132,7 @@ core/       fisica pura, sin dependencias graficas
                   forces incluye tambien el achatamiento solar J2
 app/        ventana nativa con raylib
 web/        simulador.html: fichero unico, misma fisica en JavaScript
-tests/      31 casos de validacion, framework propio de 40 lineas
+tests/      40 casos de validacion, framework propio de 40 lineas
 bench/      corrida headless y grafica de deriva de energia
 ```
 

@@ -10,6 +10,13 @@ happens to be watchable.
 **Live demo:** https://didimacveg.github.io/gravity-lab/
 **Tests:** ![tests](https://github.com/didimacveg/gravity-lab/actions/workflows/tests.yml/badge.svg)
 
+![The browser build: J2000 Solar System integrated with Yoshida 4, then a 10 solar-mass black hole dropped at 100 AU](docs/img/demo.gif)
+
+*The browser build running the J2000 Solar System with Yoshida 4 (energy
+drift shown live, bottom left), then a 10 M☉ black hole dropped at 100 AU.
+Once mass is injected by hand, the readout says so: energy conservation is no
+longer a valid check.*
+
 ---
 
 ## Headline result: Mercury's perihelion precession
@@ -33,6 +40,112 @@ precession must be exactly zero, and it is. Without that zero the other rows
 would be meaningless, because a mediocre integrator manufactures precession
 of its own: at `dt = 0.2` days this same code produces 67 arcsec/century of
 spurious precession, more than the entire effect being measured.
+
+## The integrator, and why
+
+**Default: Yoshida's fourth-order symplectic integrator**, built as three
+velocity-Verlet (kick-drift-kick) sub-steps of size `w1·dt`, `w0·dt`,
+`w1·dt` with
+
+```
+w1 = 1 / (2 - 2^(1/3)) ≈  1.3512
+w0 = -2^(1/3) · w1     ≈ -1.7024      (the middle sub-step runs BACKWARDS in time)
+```
+
+The reasoning, in the order it matters for this project:
+
+1. **The problem is Hamiltonian, so the integrator should be symplectic.**
+   Gravity conserves energy and angular momentum exactly. A symplectic map
+   preserves the phase-space structure of the flow, which means it exactly
+   conserves a *shadow* Hamiltonian that differs from the true one by
+   `O(dt^p)`. Consequence: the energy error oscillates but **does not grow**,
+   for as long as you integrate. RK4 has no such property and its energy
+   error grows linearly with time (measured below). Measuring a 43
+   arcsec/century effect over centuries is impossible with a method whose
+   error accumulates.
+2. **Pairwise central forces + kick-drift-kick conserve momentum exactly.**
+   Each kick changes every velocity by forces that cancel in pairs along the
+   separation vector, so linear and angular momentum change only by
+   round-off. The tests check this to 1e-13 on the full 3D system.
+3. **Order 4 instead of 2, for the same structure.** Velocity Verlet is
+   symplectic but second order: halving `dt` only reduces error 4x. Yoshida's
+   composition cancels the third-order error term of Verlet, so halving `dt`
+   reduces it 16x while staying symplectic and time-reversible. For Mercury's
+   precession this is the difference between a usable `dt` and a spurious
+   effect larger than the one being measured.
+4. **Cost.** Three force evaluations per step versus four for RK4. At equal
+   work the two fourth-order methods give similar short-term accuracy (see
+   the cost plot below); only Yoshida keeps it over long runs.
+
+The other integrators exist for comparison: explicit Euler to show what
+failure looks like, Verlet as the second-order symplectic baseline, RK4 as the
+classic non-symplectic fourth-order method.
+
+One honest caveat: the tests and the native app use a fixed `dt`, which is
+what the symplectic guarantees assume. The browser build subdivides each
+frame's step with `stepAdaptive` (see *Numerical stability*) so it survives a
+black hole flying through; a state-dependent step size is no longer strictly
+symplectic. That is the trade-off behind the "block timesteps" item under
+*Known limitations*.
+
+## Physical validation
+
+The validation suite (`tests/`, 40 cases, run in CI on GCC and Clang) checks
+the physics against closed-form results and observations, not against
+previous runs of the same code. The newest block,
+[`tests/test_physical_validation.cpp`](tests/test_physical_validation.cpp),
+covers:
+
+| Check | Scenario | Result (measured) |
+|---|---|---|
+| Diagnostics are right | Two bodies, e = 0.6, mass ratio 1e-3 | `E` and `‖L‖` equal the closed forms `-GMm/2a` and `μ√(G(M+m)a(1-e²))` to 1e-13 |
+| Order of convergence | Same, against the **exact Kepler solution** | Euler 0.92 → 1, Verlet 2.00, RK4 4.06, Yoshida 4.00 |
+| Energy is bounded | 200 orbits at e = 0.6 | Verlet 2.9e-4, Yoshida 1.6e-7, worst error in orbits 101-200 no larger than in 1-100 |
+| Energy drifts without symplecticity | Same orbit, RK4 | error doubles when the run doubles |
+| Energy error scales as dt^p | Halving dt | ×4 for Verlet, ×16 for Yoshida |
+| Angular momentum | J2000 system + dwarf planets, asteroids, comets, 3D, 50 yr | the whole vector conserved to 5e-15 (Verlet), 2e-14 (Yoshida); RK4 7e-11 |
+| Linear momentum | Same | stays below 1e-17 in the barycentric frame |
+| Kepler's third law, binaries | Five orbits from e = 0.017 to e = 0.9, mass ratios up to 0.1 | simulated period = `2π√(a³/G(M+m))` to 1e-11 (1e-7 for e = 0.9) |
+| Kepler's third law, Solar System | Eight planets, J2000, interacting | sidereal periods vs observed: inner planets ≤ 2.3e-5, giants ≤ 0.7 % (one perturbed orbit vs the tabulated mean; explained in the test) |
+
+A test that cannot fail proves nothing, so the suite was checked against a
+deliberately broken Yoshida coefficient: five of these tests fail.
+
+### Error versus time step
+
+![Error vs dt for the four integrators: two-body position and energy error, Solar System energy and angular momentum error](docs/img/error_vs_dt.png)
+
+Fitted orders of convergence, over the four smallest time steps above
+round-off:
+
+| Integrator | Theoretical order | Position (two-body) | Energy (two-body) | Energy (Solar System) |
+|---|---:|---:|---:|---:|
+| Explicit Euler | 1 | n/a (error > 1 at every dt) | 0.71 | 0.62 |
+| Velocity Verlet | 2 | 2.00 | 2.00 | 2.00 |
+| Runge-Kutta 4 | 4 | 4.33 | 4.63 | 5.01 |
+| Yoshida 4 | 4 | 4.00 | 4.00 | 3.99 |
+
+Verlet and Yoshida sit exactly on their theoretical orders. Euler never
+reaches its asymptotic regime on an orbit with e = 0.6 at these step sizes.
+RK4 converges *faster* than 4 in this range: its energy error per step is
+higher order than its global error, a pre-asymptotic effect that does not
+change the long-term picture. Note the bottom-right panel: the symplectic
+methods conserve angular momentum at the level of floating-point noise for
+every `dt`, while RK4 loses it as `dt^4`.
+
+![Position error against force evaluations per orbit](docs/img/cost_vs_accuracy.png)
+
+Reproduce:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+./build/gl_convergence bench/out/convergence.csv            # ~3 s
+pip install matplotlib numpy
+python bench/plot_convergence.py bench/out/convergence.csv docs/img
+```
+
+CI regenerates the CSV and plots on every push and attaches them as a
+build artifact, with the fitted-order table in the job summary.
 
 ## Symplectic vs non-symplectic integration
 
@@ -158,8 +271,10 @@ core/       physics, no graphics dependencies, WASM-ready
   blackhole.*     horizon, pericentre capture, tidal disruption
 app/        native window (raylib)
 web/        simulador.html, single self-contained file, same physics in JS
-tests/      31 validation cases, 40-line in-house framework
-bench/      headless runs and the energy-drift plot
+tests/      40 validation cases, 40-line in-house framework
+  kepler_reference.hpp   exact two-body solution used by tests and benchmarks
+bench/      headless runs: energy drift, error vs dt (gl_convergence) and plots
+docs/img/   README figures and the demo GIF
 ```
 
 The universe state is a flat struct of arrays, fully decoupled from
@@ -170,14 +285,17 @@ the struct.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
-./build/gl_tests     # 31 validation cases
-./build/gl_bench     # writes energy_drift.csv
+./build/gl_tests        # 40 validation cases, ~35 s
+./build/gl_bench        # writes energy_drift.csv
+./build/gl_convergence  # writes convergence.csv (error vs dt)
 ```
 
 The interactive simulator needs no build at all: open `web/simulador.html`
 in any browser. Single file, no dependencies, no server.
 
-CI compiles the project and runs the full validation suite on every push.
+CI (GitHub Actions) builds with GCC and Clang, runs the full validation
+suite on every push and pull request, and regenerates the error-vs-step
+plots as an artifact.
 
 ## Known limitations
 
