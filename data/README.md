@@ -29,3 +29,12 @@ Guardalo como `data/solar_system.csv` con columnas
 
 Con los datos bien cargados, la suma de m·v de los nueve cuerpos debe dar
 practicamente cero. Si no, has mezclado marcos o unidades.
+
+## Actualizacion: los datos de Horizons ya estan en el repositorio
+
+Desde la validacion contra JPL Horizons, las efemerides de referencia se
+descargan con `tools/fetch_horizons.py` y se guardan en `web/data/` (la web
+las necesita ahi) y en `core/horizons_data.hpp`. `makeSolarSystemHorizons()`
+arranca de los vectores de estado de DE441 en J2000.0. Las condiciones
+iniciales por elementos keplerianos de arriba siguen existiendo y las usan
+los tests originales.

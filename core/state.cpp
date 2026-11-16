@@ -17,6 +17,7 @@ std::size_t World::add(const std::string& n, BodyKind k, double m, double r,
     position.push_back(pos);
     velocity.push_back(vel);
     acceleration.push_back(Vec3{});
+    accelerationPN.push_back(Vec3{});
     alive.push_back(1);
     return mass.size() - 1;
 }

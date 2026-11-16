@@ -9,7 +9,8 @@ enum class Integrator {
     ExplicitEuler,  // orden 1, no simplectico. Existe para que se vea que explota.
     RK4,            // orden 4, NO simplectico: deriva secular de energia.
     VerletKDK,      // orden 2, simplectico. El caballo de batalla.
-    Yoshida4        // orden 4, simplectico. Composicion de 3 pasos de Verlet.
+    Yoshida4,       // orden 4, simplectico. Composicion de 3 pasos de Verlet.
+    Yoshida6        // orden 6, simplectico. Composicion de 7 pasos de Verlet.
 };
 
 // Coeficientes de Yoshida de 4o orden:

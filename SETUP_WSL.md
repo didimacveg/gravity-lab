@@ -30,7 +30,7 @@ cmake --build build -j
 ./build/gl_tests
 ```
 
-Deben salir 17 casos y `Todo correcto`.
+Deben salir 52 casos y `Todo correcto`. Tarda unos 40 segundos.
 
 ## 4. La medida que importa
 
@@ -46,12 +46,13 @@ Genera `energy_drift.csv` y `energy_drift.png`, la primera grafica del README.
 
 Dos opciones.
 
-**Navegador**, sin instalar nada. Copia el fichero a Windows y abrelo con
-doble clic:
+**Navegador.** La web son varios ficheros (módulos de JavaScript), así que
+hay que servirla; abrir `index.html` con doble clic no funciona:
 ```bash
-cp web/simulador.html /mnt/c/Users/swatt/Desktop/
+cd web
+python3 -m http.server 8000
 ```
-Es un fichero unico, sin dependencias ni servidor.
+y abre <http://localhost:8000> en el navegador de Windows.
 
 **Ventana nativa** con raylib:
 ```bash

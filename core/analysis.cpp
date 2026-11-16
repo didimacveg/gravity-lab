@@ -26,6 +26,26 @@ OrbitalElements elementsOf(const World& w, std::size_t body,
     return e;
 }
 
+double longitudeOfPerihelion(const World& w, std::size_t body,
+                             std::size_t center) {
+    const Vec3 r = w.position[body] - w.position[center];
+    const Vec3 v = w.velocity[body] - w.velocity[center];
+    const double mu = G * (w.mass[center] + w.mass[body]);
+    const double rn = r.norm();
+    if (rn <= 0.0 || mu <= 0.0) return 0.0;
+    const Vec3 L = r.cross(v);
+    const Vec3 e = v.cross(L) * (1.0 / mu) - r * (1.0 / rn);
+    // Linea de nodos: k x L, donde k es el polo de la ecliptica.
+    const Vec3 node{-L.y, L.x, 0.0};
+    const double nn = node.norm(), en = e.norm();
+    if (nn <= 0.0 || en <= 0.0) return std::atan2(e.y, e.x);
+    double c = node.dot(e) / (nn * en);
+    c = std::fmax(-1.0, std::fmin(1.0, c));
+    double argPeri = std::acos(c);
+    if (e.z < 0.0) argPeri = 2.0 * M_PI - argPeri;
+    return std::atan2(node.y, node.x) + argPeri;
+}
+
 double precessionRate(const std::vector<double>& timesDays,
                       const std::vector<double>& anglesRad) {
     const std::size_t n = timesDays.size();

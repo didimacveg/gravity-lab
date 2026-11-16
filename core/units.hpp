@@ -18,6 +18,7 @@ inline constexpr double R_SCHWARZSCHILD_PER_SOLAR_MASS =
     2.0 * G / (C_LIGHT * C_LIGHT);
 
 inline constexpr double SECONDS_PER_DAY = 86400.0;
+inline constexpr double AU_KM = 149597870.7;  // definicion IAU 2012
 inline constexpr double DAYS_PER_JULIAN_CENTURY = 36525.0;
 inline constexpr double ARCSEC_PER_RADIAN = 206264.806247;
 

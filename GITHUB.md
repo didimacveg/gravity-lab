@@ -52,13 +52,13 @@ lineas no cuenta nada.
 
 ## 4. Integracion continua
 
-`.github/workflows/tests.yml` compila el proyecto y corre los 27 tests en
-cada push. Si algo se rompe, GitHub te marca el commit en rojo. El CSV del
+`.github/workflows/tests.yml` compila el proyecto y corre los 52 tests en
+cada push, además de los tests de la web. Si algo se rompe, GitHub te marca el commit en rojo. El CSV del
 benchmark queda guardado como artefacto descargable.
 
 ## 5. Publicar el simulador en la web
 
-`.github/workflows/pages.yml` publica `web/simulador.html` automaticamente.
+`.github/workflows/pages.yml` publica la carpeta `web/` automaticamente.
 Para activarlo, una sola vez: en el repositorio, Settings > Pages > Source,
 elige **GitHub Actions**.
 

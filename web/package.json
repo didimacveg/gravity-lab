@@ -1,0 +1,10 @@
+{
+  "name": "gravity-lab-web",
+  "private": true,
+  "type": "module",
+  "description": "Browser front end of gravity-lab. No dependencies, no build step.",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python3 -m http.server 8000"
+  }
+}

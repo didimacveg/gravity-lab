@@ -32,6 +32,10 @@ struct World {
     std::vector<Vec3> position;      // UA
     std::vector<Vec3> velocity;      // UA/dia
     std::vector<Vec3> acceleration;  // UA/dia^2
+    // Parte de `acceleration` que depende de la velocidad (termino 1PN).
+    // Verlet la necesita aparte para tratarla de forma simetrica en el
+    // tiempo; vale cero si 1PN esta desactivado.
+    std::vector<Vec3> accelerationPN;
     std::vector<double> mass;        // M_sol
     std::vector<double> radius;      // UA (radio fisico, no de dibujo)
     std::vector<BodyKind> kind;
