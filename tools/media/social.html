@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>gravity-lab social cards</title>
+<style>
+@font-face { font-family: "Inter"; font-weight: 400; src: url("../../web/fonts/inter-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 600; src: url("../../web/fonts/inter-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url("../../web/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 600; src: url("../../web/fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2"); }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1080px; height: 1350px; overflow: hidden; background: #05070c; color: #e8eef7; font-family: "Inter", sans-serif; }
+.card { width: 1080px; height: 1350px; padding: 64px 64px 56px; display: flex; flex-direction: column; }
+.kicker { font: 600 20px "JetBrains Mono", monospace; letter-spacing: .12em; color: #4c9dff; text-transform: uppercase; }
+h1 { font: 600 58px/1.12 "Inter", sans-serif; letter-spacing: -.02em; margin-top: 22px; }
+h1 em { font-style: normal; color: #7fd4ff; }
+.sub { font-size: 27px; line-height: 1.4; color: #b4c0d2; margin-top: 20px; }
+canvas.scene { width: 952px; border: 1px solid #1c2636; border-radius: 10px; margin-top: 30px; display: block; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; margin-top: 26px; }
+.rowp { display: flex; align-items: center; gap: 14px; padding: 17px 0; border-bottom: 1px solid #1c2636; font-size: 27px; }
+.rowp i { width: 14px; height: 14px; border-radius: 50%; }
+.rowp b { margin-left: auto; font: 600 27px "JetBrains Mono", monospace; }
+.foot { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; font: 19px/1.45 "JetBrains Mono", monospace; color: #7f8ca1; }
+.foot b { color: #e8eef7; font-weight: 600; white-space: nowrap; }
+.foot span { white-space: nowrap; }
+.bars { margin-top: 34px; }
+.bars h2 { font: 600 20px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; color: #7f8ca1; margin: 52px 0 0; }
+.bar { margin-top: 30px; }
+.bar .lab { display: flex; justify-content: space-between; align-items: baseline; font-size: 25px; color: #b4c0d2; gap: 20px; }
+.bar .lab b { font: 600 32px "JetBrains Mono", monospace; color: #e8eef7; white-space: nowrap; }
+.bar .track { height: 22px; margin-top: 12px; background: #0f1726; border-radius: 4px; }
+.bar .fill { height: 100%; border-radius: 4px; background: #4c9dff; }
+.bar.bad .fill { background: #ffb86b; }
+.axis { font: 17px "JetBrains Mono", monospace; color: #7f8ca1; margin-top: 22px; }
+.big { font: 600 150px/1 "JetBrains Mono", monospace; letter-spacing: -.04em; margin-top: 30px; }
+.big small { font-size: 46px; color: #b4c0d2; letter-spacing: -.01em; font-weight: 400; }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 26px; }
+.trio div { border: 1px solid #1c2636; border-radius: 8px; padding: 16px 18px; background: #0b101a; }
+.trio span { display: block; font-size: 20px; color: #7f8ca1; }
+.trio b { display: block; font: 600 34px "JetBrains Mono", monospace; margin-top: 6px; }
+canvas.plot { width: 952px; margin-top: 24px; display: block; }
+.note { font-size: 22px; color: #7f8ca1; margin-top: 12px; font-family: "JetBrains Mono", monospace; }
+#result { opacity: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="social.js"></script>
+</body>
+</html>

@@ -26,13 +26,27 @@ dónde seguir.
 - [x] **5. Rendimiento**: presupuesto de física por fotograma, calidad
   adaptativa, `prefers-reduced-motion`.
 
-## Pendiente
+- [x] **6. `docs/DEFENSA.md`**: la física desde cero y 15 preguntas.
+- [x] **7. README** en inglés con capturas, tabla de validación, cómo
+  reproducirla y sección «How this was built». `README.es.md` resumido.
+- [x] **8. LinkedIn** en `docs/linkedin/`: tres textos, tres imágenes de
+  1080×1350 y un vídeo de 20 s. Calendario: martes 12, 19 y 26 de enero de 2027.
+- [x] `docs/DECISIONS.md` y `docs/PASOS_PARA_DIEGO.md`.
+- [x] Pull request contra `main`.
 
-- [ ] 6. `docs/DEFENSA.md`
-- [ ] 7. README en inglés con capturas y tabla de validación
-- [ ] 8. LinkedIn: 3 publicaciones, imágenes 1080×1350, vídeo
-- [ ] `docs/DECISIONS.md`, `docs/PASOS_PARA_DIEGO.md`
-- [ ] Pull request contra `main`
+## Pendiente (depende de Diego)
+
+Ver `docs/PASOS_PARA_DIEGO.md`: revisar y fusionar el pull request,
+comprobar GitHub Pages tras la fusión, decidir qué hacer con las notas
+antiguas, estudiar DEFENSA y publicar en LinkedIn.
+
+## Limitaciones conocidas que quedan abiertas
+
+- El error residual de Urano y Neptuno (276 y 656 km en un siglo) no está
+  atribuido a una causa concreta.
+- La Luna no es un cuerpo aparte; solo está su efecto promediado.
+- El flujo de Pages solo se ejecuta en `main`: no se ha podido probar desde
+  la rama.
 
 ## Cómo comprobar que todo sigue bien
 
