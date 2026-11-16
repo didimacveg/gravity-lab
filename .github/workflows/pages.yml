@@ -30,10 +30,16 @@ jobs:
         with:
           enablement: true
 
+      # El sitio es la carpeta web/ tal cual: no hay paso de compilacion.
+      # Se dejan fuera los tests, que no hacen falta en produccion.
       - name: Preparar sitio
         run: |
           mkdir -p _site
-          cp web/simulador.html _site/index.html
+          cp -r web/index.html web/simulador.html web/css web/js web/data web/fonts _site/
+          if [ -d web/media ]; then cp -r web/media _site/; fi
+          touch _site/.nojekyll
+          test -f _site/index.html
+          test -f _site/data/horizons_planets.f64
 
       - uses: actions/upload-pages-artifact@v3
         with:

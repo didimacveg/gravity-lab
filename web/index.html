@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>gravity-lab · N-body Solar System validated against JPL Horizons</title>
+<meta name="description" content="An N-body simulator of the Solar System that shows its own error: every planet is compared live with NASA/JPL Horizons, and Mercury's relativistic precession is measured in the browser.">
+<meta name="theme-color" content="#05070c">
+<meta property="og:title" content="gravity-lab">
+<meta property="og:description" content="N-body Solar System simulator, validated against NASA/JPL Horizons.">
+<meta property="og:image" content="media/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2305070c'/%3E%3Cellipse cx='16' cy='16' rx='11' ry='6' fill='none' stroke='%234C9DFF' stroke-width='2' transform='rotate(-25 16 16)'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%237FD4FF'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./">gravity<span>-lab</span></a>
+  <p class="tagline" data-i18n="tagline">N-body Solar System, checked against NASA/JPL Horizons</p>
+  <div class="top-right">
+    <div class="seg lang" role="group" data-i18n-title="lang.label" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="es" aria-pressed="false">ES</button>
+    </div>
+    <a class="gh" href="https://github.com/didimacveg/gravity-lab" rel="noopener" data-i18n="source">Source</a>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="stage" aria-label="3D view">
+    <canvas id="view" tabindex="0" aria-label="Solar System, 3D view"></canvas>
+
+    <div class="hud hud-date" aria-live="off">
+      <div class="date" id="hud-date">2000-01-01 12:00</div>
+      <div class="date-sub"><span id="hud-jd">JD 2451545.0</span> TDB · <span id="hud-elapsed">+0.00 yr</span></div>
+    </div>
+    <div class="chip" id="chip" data-i18n="chip.real"></div>
+    <div class="hud hud-note" id="hud-note"></div>
+    <div class="status" id="status" data-i18n="loading" role="status">Loading ephemerides…</div>
+
+    <div class="timebar">
+      <button type="button" class="btn icon primary" id="play" data-i18n-title="time.pause" aria-label="Pause">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path id="play-icon" d="M4 2h3v12H4zM9 2h3v12H9z" fill="currentColor"/></svg>
+      </button>
+      <label class="field">
+        <span data-i18n="time.speed">Speed</span>
+        <select id="speed"></select>
+      </label>
+      <label class="field goto">
+        <span data-i18n="time.goto">Go to date</span>
+        <span class="row"><input type="date" id="goto" min="1900-01-01" max="2100-01-01" value="2030-01-01">
+        <button type="button" class="btn" id="go" data-i18n="time.go">Go</button></span>
+      </label>
+      <div class="field">
+        <span data-i18n="view.scale">Scale</span>
+        <div class="seg" id="scale" role="group">
+          <button type="button" data-scale="linear" aria-pressed="true" data-i18n="view.linear">Linear</button>
+          <button type="button" data-scale="log" aria-pressed="false" data-i18n="view.log">Log</button>
+        </div>
+      </div>
+      <button type="button" class="btn" id="view-reset" data-i18n="view.reset">Reset view</button>
+      <button type="button" class="btn" id="reset" data-i18n="time.reset">Reset</button>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabbtn-sim" aria-controls="tab-sim" aria-selected="true" data-tab="sim" data-i18n="tab.sim">Solar System</button>
+      <button type="button" role="tab" id="tabbtn-val" aria-controls="tab-val" aria-selected="false" data-tab="val" data-i18n="tab.val">Validation</button>
+      <button type="button" role="tab" id="tabbtn-exp" aria-controls="tab-exp" aria-selected="false" data-tab="exp" data-i18n="tab.exp">Experiments</button>
+      <button type="button" role="tab" id="tabbtn-what" aria-controls="tab-what" aria-selected="false" data-tab="what" class="tab-what" data-i18n="tab.what">What if</button>
+    </div>
+
+    <div class="tabpanel" id="tab-sim" role="tabpanel" aria-labelledby="tabbtn-sim">
+      <div class="card" id="info">
+        <p class="muted" data-i18n="info.none">Click a body to see its orbit.</p>
+      </div>
+      <div class="group">
+        <h3 data-i18n="sim.integrator">Integrator</h3>
+        <div class="seg wrap" id="method" role="group">
+          <button type="button" data-m="euler" aria-pressed="false">Euler</button>
+          <button type="button" data-m="verlet" aria-pressed="false">Verlet</button>
+          <button type="button" data-m="rk4" aria-pressed="false">RK4</button>
+          <button type="button" data-m="yoshida4" aria-pressed="false">Yoshida 4</button>
+          <button type="button" data-m="yoshida6" aria-pressed="true">Yoshida 6</button>
+        </div>
+        <p class="hint" id="method-note"></p>
+        <label class="field inline"><span data-i18n="sim.dt">Time step</span>
+          <span class="row"><select id="dt"></select> <span class="unit" data-i18n="sim.days">days</span></span></label>
+      </div>
+      <div class="group">
+        <h3 data-i18n="sim.forces">Forces</h3>
+        <label class="check"><input type="checkbox" id="f-pn" checked><span data-i18n="sim.pn">General relativity (1PN)</span></label>
+        <label class="check"><input type="checkbox" id="f-emq" checked><span data-i18n="sim.emq">Earth–Moon quadrupole</span></label>
+        <label class="check"><input type="checkbox" id="f-j2"><span data-i18n="sim.j2">Solar oblateness (J2)</span></label>
+        <p class="hint" data-i18n="sim.restartNote"></p>
+      </div>
+      <div class="group">
+        <h3 data-i18n="sim.display">Display</h3>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="d-orbits" checked><span data-i18n="sim.orbits">Orbits</span></label>
+          <label class="check"><input type="checkbox" id="d-trails"><span data-i18n="sim.trails">Trails</span></label>
+          <label class="check"><input type="checkbox" id="d-labels" checked><span data-i18n="sim.labels">Labels</span></label>
+          <label class="check"><input type="checkbox" id="d-grid" checked><span data-i18n="sim.grid">Ecliptic plane</span></label>
+          <label class="check"><input type="checkbox" id="d-stars" checked><span data-i18n="sim.stars">Stars</span></label>
+          <label class="check"><input type="checkbox" id="d-starNames" checked><span data-i18n="sim.starNames">Star names</span></label>
+        </div>
+        <label class="check"><input type="checkbox" id="d-minor"><span data-i18n="sim.minor">Dwarf planets, asteroids, comets</span></label>
+        <p class="hint" data-i18n="view.help"></p>
+      </div>
+      <div class="group">
+        <h3 data-i18n="sim.model">Model</h3>
+        <p class="hint" data-i18n="sim.modelText"></p>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="tab-val" role="tabpanel" aria-labelledby="tabbtn-val" hidden>
+      <h2 data-i18n="val.title">Simulation vs NASA/JPL Horizons</h2>
+      <p class="hint" data-i18n="val.intro"></p>
+      <div class="row gap">
+        <button type="button" class="btn primary" id="run100" data-i18n="val.run">Run 100 years now</button>
+        <span class="config" id="val-config"></span>
+      </div>
+
+      <div class="group">
+        <h3 data-i18n="val.error">Position error of each planet</h3>
+        <div id="chart-error"></div>
+        <table class="values" id="error-table" aria-describedby="chart-error">
+          <thead><tr><th></th><th data-i18n="val.errorNow">now</th><th data-i18n="val.errorMax">max</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="group">
+        <h3 data-i18n="val.mercury">Mercury's perihelion advance</h3>
+        <p class="hint" data-i18n="val.mercuryIntro"></p>
+        <div class="stat-row">
+          <div class="stat"><span class="stat-label" data-i18n="val.gr">Relativistic part</span>
+            <b class="stat-value" id="gr-value">–</b>
+            <span class="stat-sub"><span data-i18n="val.accepted">accepted</span> 42.98 <span data-i18n="unit.arcsecCy">″/century</span></span></div>
+        </div>
+        <div id="chart-gr"></div>
+        <dl class="kv">
+          <dt data-i18n="val.total">Total, this simulation</dt><dd id="varpi-sim">–</dd>
+          <dt data-i18n="val.de441">Total, JPL DE441 (same fit)</dt><dd id="varpi-jpl">–</dd>
+        </dl>
+      </div>
+
+      <div class="group">
+        <h3 data-i18n="val.energy">Energy drift |ΔE/E|</h3>
+        <div id="chart-energy"></div>
+        <p class="hint" data-i18n="val.energyNote"></p>
+      </div>
+
+      <details class="group">
+        <summary data-i18n="val.table">Every integrator and step, 100 years</summary>
+        <p class="hint" data-i18n="val.tableNote"></p>
+        <div class="scroll-x"><table class="values wide" id="matrix"></table></div>
+      </details>
+      <p class="hint cite"><span data-i18n="val.cite"></span> <span id="retrieved"></span>.</p>
+    </div>
+
+    <div class="tabpanel" id="tab-exp" role="tabpanel" aria-labelledby="tabbtn-exp" hidden>
+      <h2 data-i18n="exp.pick">Guided experiments</h2>
+      <div class="exp-list" id="exp-list" role="group"></div>
+      <div id="exp-body"></div>
+    </div>
+
+    <div class="tabpanel" id="tab-what" role="tabpanel" aria-labelledby="tabbtn-what" hidden>
+      <h2 data-i18n="what.title">Hypothetical scenarios</h2>
+      <p class="warning" data-i18n="what.warning"></p>
+      <div class="group">
+        <h3 data-i18n="what.hole">Black hole</h3>
+        <label class="field"><span><span data-i18n="what.mass">Mass</span> <b id="bh-mass-v">10 M☉</b></span>
+          <input type="range" id="bh-mass" min="0" max="6.7" step="0.05" value="1"></label>
+        <label class="field"><span><span data-i18n="what.magnify">Horizon drawn magnified</span> <b id="bh-scale-v">×10⁶</b></span>
+          <input type="range" id="bh-scale" min="0" max="8" step="1" value="6"></label>
+        <p class="hint" data-i18n="what.magnifyNote"></p>
+        <button type="button" class="btn" id="bh-drop" data-i18n="what.drop">Send in from 100 AU</button>
+      </div>
+      <div class="group">
+        <h3 data-i18n="what.star">Passing star</h3>
+        <p class="hint" data-i18n="what.starNote"></p>
+        <button type="button" class="btn" id="star-drop" data-i18n="what.sendStar">Send in from 250 AU</button>
+      </div>
+      <div class="group">
+        <dl class="kv">
+          <dt data-i18n="what.rs">Schwarzschild radius</dt><dd id="what-rs">–</dd>
+          <dt data-i18n="what.swallowed">Swallowed</dt><dd id="what-eaten">–</dd>
+          <dt data-i18n="what.ejected">On escape orbits</dt><dd id="what-ejected">–</dd>
+          <dt data-i18n="what.substeps">Adaptive substeps this frame</dt><dd id="what-sub">–</dd>
+        </dl>
+        <button type="button" class="btn" id="what-reset" data-i18n="what.reset">Restore the Solar System</button>
+      </div>
+    </div>
+
+    <footer class="foot">
+      <p data-i18n="footer.built"></p>
+      <p><a href="https://github.com/didimacveg/gravity-lab">github.com/didimacveg/gravity-lab</a> · MIT</p>
+    </footer>
+  </aside>
+</main>
+<noscript><p style="padding:16px">gravity-lab needs JavaScript to run the simulation.</p></noscript>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

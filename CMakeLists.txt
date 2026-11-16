@@ -20,6 +20,9 @@ add_library(gl_core STATIC
 target_include_directories(gl_core PUBLIC core)
 
 if(NOT MSVC)
+    # -ffp-contract=off: sin fusionar a*b+c en una sola instruccion (FMA), para
+    # que los numeros salgan iguales en x86 y en ARM.
+    target_compile_options(gl_core PUBLIC -ffp-contract=off)
     target_compile_options(gl_core PRIVATE -Wall -Wextra -O2)
     # Prohibido -ffast-math: rompe la reproducibilidad y hace que los tests
     # de conservacion mientan.

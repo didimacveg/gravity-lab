@@ -88,6 +88,25 @@ Vec3 accelerationJ2(const Vec3& d, double centralMass, double radius,
                 k * d.z * (3.0 - z2r2)};
 }
 
+double energy1PN(const World& w) {
+    const std::size_t n = w.size();
+    std::size_t c = 0;
+    double best = -1.0;
+    for (std::size_t i = 0; i < n; ++i)
+        if (w.alive[i] && w.mass[i] > best) { best = w.mass[i]; c = i; }
+    const double mu = G * w.mass[c], c2 = C_LIGHT * C_LIGHT;
+    double e = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+        if (i == c || !w.alive[i] || w.mass[i] > 1e-3 * w.mass[c]) continue;
+        const double r = (w.position[i] - w.position[c]).norm();
+        const double v2 = (w.velocity[i] - w.velocity[c]).normSquared();
+        if (r <= 0.0) continue;
+        e += w.mass[i] * (0.375 * v2 * v2 + 1.5 * mu * v2 / r +
+                          0.5 * mu * mu / (r * r)) / c2;
+    }
+    return e;
+}
+
 Vec3 accelerationEarthMoonQuadrupole(const Vec3& d, double centralMass) {
     const double r2 = d.normSquared();
     if (r2 <= 0.0) return Vec3{};

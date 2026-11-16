@@ -6,19 +6,59 @@ on:
   pull_request:
 
 jobs:
-  build-and-test:
+  core:
+    name: C++ core and JPL Horizons validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configurar
+      - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Compilar
+      - name: Build
         run: cmake --build build -j
-      - name: Bateria de validacion
+      - name: Validation suite (51 cases, includes the Horizons comparison)
         run: ./build/gl_tests
-      - name: Benchmark de integradores
+      - name: Integrator benchmark
         run: ./build/gl_bench
+      - name: Validation table against Horizons
+        run: |
+          mkdir -p out
+          ./build/gl_validate out
+          cat out/validation.md >> "$GITHUB_STEP_SUMMARY"
+      - name: The committed table matches what the code produces
+        run: python3 tools/check_validation.py out/validation.json web/data/validation.json
       - uses: actions/upload-artifact@v4
         with:
-          name: energy-drift
-          path: energy_drift.csv
+          name: validation
+          path: |
+            energy_drift.csv
+            out/validation.json
+            out/validation.md
+
+  web:
+    name: Web physics (same checks, JavaScript port)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        working-directory: web
+        run: npm test
+
+  e2e:
+    name: Browser smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        working-directory: web
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Load the site and run it
+        working-directory: web
+        run: node e2e/smoke.mjs

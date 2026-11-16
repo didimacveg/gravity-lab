@@ -57,6 +57,14 @@ void compute1PN(const World& w, const std::vector<Vec3>& vel,
 Vec3 acceleration1PN(const Vec3& relPos, const Vec3& relVel,
                      double centralMass);
 
+// Energia asociada al termino 1PN. La energia newtoniana (cinetica mas
+// potencial) NO se conserva cuando 1PN esta activo: oscila con cada orbita
+// de Mercurio a nivel de 1e-9. La cantidad conservada lleva, por cada
+// cuerpo de masa m en torno a la masa central M (gauge armonico):
+//   m/c^2 * [ 3 v^4/8 + 3 GM v^2/(2r) + (GM)^2/(2 r^2) ]
+// Sumarla permite medir la deriva del INTEGRADOR y no la del diagnostico.
+double energy1PN(const World& w);
+
 // Aceleracion por el achatamiento de un cuerpo central de radio R.
 Vec3 accelerationJ2(const Vec3& relPos, double centralMass, double radius,
                     double j2);

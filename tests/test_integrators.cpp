@@ -124,3 +124,25 @@ TEST(en_el_sistema_solar_real_euler_pierde_la_energia_y_yoshida_no) {
     ASSERT(y10 < 1e-8 && y40 < 1e-8);  // acotada
     ASSERT(e40 > 1e5 * y40);
 }
+
+TEST(la_energia_1PN_se_conserva_y_la_newtoniana_no) {
+    // Sol + Mercurio con 1PN. La energia newtoniana oscila ~1e-7 en cada
+    // orbita; con el termino relativista la suma es constante.
+    World w = makeEllipticTwoBody(0.387, 0.2056, 1.0);
+    w.mass[1] = 1.66e-7;
+    ForceConfig cfg;
+    cfg.enable1PN = true;
+    computeAccelerations(w, cfg);
+    const double n0 = computeDiagnostics(w).totalEnergy;
+    const double p0 = n0 + energy1PN(w);
+    double newton = 0.0, full = 0.0;
+    for (int i = 0; i < 4000; ++i) {
+        step(w, 0.05, Integrator::Yoshida6, cfg);
+        const double e = computeDiagnostics(w).totalEnergy;
+        newton = std::fmax(newton, std::fabs(e / n0 - 1.0));
+        full = std::fmax(full, std::fabs((e + energy1PN(w)) / p0 - 1.0));
+    }
+    std::printf("    max |dE/E|: newtoniana %.1e, con termino 1PN %.1e\n", newton, full);
+    ASSERT(newton > 1e-8);
+    ASSERT(full < 1e-11);
+}

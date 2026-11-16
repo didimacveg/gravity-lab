@@ -59,7 +59,10 @@ ValidationRun runValidation(const Reference& ref, World w, Integrator method,
                           std::vector<double>(planets, 0.0));
 
     computeAccelerations(w, cfg);
-    const double e0 = computeDiagnostics(w).totalEnergy;
+    auto energy = [&]() {
+        return computeDiagnostics(w).totalEnergy + (cfg.enable1PN ? energy1PN(w) : 0.0);
+    };
+    const double e0 = energy();
     std::vector<double> running(planets, 0.0);
 
     for (std::size_t k = 1; k <= samples; ++k) {
@@ -77,7 +80,7 @@ ValidationRun runValidation(const Reference& ref, World w, Integrator method,
             if (yr <= out.checkpointYears[c] + 1e-9) out.maxErrorKm[c] = running;
 
         const double drift =
-            std::fabs((computeDiagnostics(w).totalEnergy - e0) / e0);
+            std::fabs((energy() - e0) / e0);
         if (!(drift <= out.maxEnergyDrift)) out.maxEnergyDrift = drift;
         out.finalEnergyDrift = drift;
 
