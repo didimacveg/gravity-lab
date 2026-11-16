@@ -89,7 +89,7 @@ with general relativity switched on than without it.
 Every test passed. Energy was conserved. The relativistic precession came
 out right.
 
-The cause was a single line. The integrator (a kick-drift-kick scheme)
+The cause was one assumption. The integrator (a kick-drift-kick scheme)
 assumes that the force depends only on position. The relativistic correction
 also depends on velocity, and the code was evaluating it with a velocity
 left over from the previous step. That breaks the time symmetry of the
@@ -110,8 +110,8 @@ separately, and the average of that is not the pull on their midpoint.
 Adding that term, with measured constants and nothing fitted, took Earth's
 error from 11,686 km to 303 km.
 
-Neither problem was visible from inside the simulation. Both were obvious
-within minutes of looking at an outside reference.
+Neither problem was visible from inside the simulation. Both showed up the
+first time it was compared with an outside reference.
 
 Built with AI assistance (Claude Code) under my direction and review. The
 regression tests for both fixes are in the repository.
