@@ -1,197 +1,109 @@
-# gravity-lab (español)
+# gravity-lab
 
-Versión en inglés: [README.md](README.md)
+Un simulador de N cuerpos del sistema solar que enseña su propio error.
 
-Simulador N-cuerpos del sistema solar en C++, con condiciones iniciales
-reales de la epoca J2000 y validado contra medidas astronomicas conocidas.
-Incluye un modulo de agujero negro y una version interactiva en navegador.
+Parte de los vectores de estado de NASA/JPL en J2000.0, integra por su
+cuenta y compara cada planeta con la efeméride del JPL sobre la marcha. Tras
+un siglo, Mercurio está a 9 km de donde dice el JPL, y la precesión
+relativista de su perihelio sale 42,98 segundos de arco por siglo, medida y
+no supuesta.
 
-No es un planetario. Es un banco de pruebas de integradores numericos que,
-ademas, se puede mirar.
+**Web:** https://didimacveg.github.io/gravity-lab/?lang=es &nbsp;·&nbsp;
+[README completo, en inglés](README.md) &nbsp;·&nbsp;
+[La física explicada desde cero](docs/DEFENSA.md)
 
-## El resultado
+![El sistema solar en gravity-lab](docs/img/solar-system.png)
 
-Mercurio adelanta su perihelio mas de lo que permite la gravedad de Newton.
-La discrepancia se midio en 1859 y no tuvo explicacion durante 56 anios,
-hasta que la relatividad general la dio en 1915. Este simulador la reproduce.
+## Validación contra JPL Horizons
 
-| Modelo | Precesion del perihelio de Mercurio |
-|---|---|
-| Solo Sol y Mercurio, Newton | 0.000 arcsec/siglo |
-| Los ocho planetas, Newton | 526.640 arcsec/siglo |
-| Los ocho planetas, con termino 1PN | 569.450 arcsec/siglo |
-| **Aportacion de la relatividad** | **42.810 arcsec/siglo** |
+Error máximo de posición heliocéntrica frente a la efeméride DE441, modelo
+completo, Yoshida 6 con paso de 0,25 días:
 
-Valor aceptado: 42.98 arcsec/siglo. Error del 0.4%.
-
-La primera fila es el control: sin perturbaciones ni relatividad la
-precesion debe ser exactamente cero, y lo es. Sin ese cero las otras filas
-no significarian nada, porque un integrador mediocre inventa precesion por
-su cuenta. Con `dt = 0.2` dias este mismo codigo produce 67 arcsec/siglo de
-precesion espuria, mas del doble del efecto que queremos medir.
-
-## Conservacion de energia por integrador
-
-Sistema solar completo, `dt = 0.5` dias, error relativo `|dE/E|`:
-
-| Integrador | A los 10 anios | A los 100 anios |
-|---|---|---|
-| Euler explicito | 2.1e-02 | 8.0e-02 |
-| RK4 | 2.5e-09 | 2.6e-08 |
-| Verlet KDK | 6.3e-07 | 3.3e-08 |
-| Yoshida 4 | 2.2e-09 | 1.4e-11 |
-
-RK4 es de cuarto orden y comete menos error en cada paso que Verlet, que es
-de segundo. Aun asi su error **crece**, mientras que el de Verlet oscila sin
-acumularse. La razon es que Verlet y Yoshida son simplecticos: conservan la
-estructura geometrica del flujo hamiltoniano, asi que la energia queda
-atrapada cerca de su valor inicial en vez de derivar. Para integraciones
-largas importa mas esa propiedad que el orden de convergencia.
-
-## Criterio de captura
-
-El fallo mas sutil del proyecto estuvo aqui, y merece explicarse porque es
-un error facil de cometer y dificil de ver.
-
-La version original preguntaba si el cuerpo esta **ahora mismo** dentro del
-radio de captura. Eso falla por dos motivos. El primero es que entre dos
-pasos consecutivos un cuerpo rapido atraviesa el horizonte entero y sale por
-el otro lado sin que nadie lo registre. El segundo es peor: aplicar la
-formula del enfoque gravitatorio con la velocidad **local** en vez de la
-velocidad en el infinito hace que el radio de captura se encoja justo cuando
-el cuerpo acelera al caer, y se puede demostrar que asi nunca captura nada.
-
-El criterio correcto no mira donde esta el cuerpo, sino por donde va a
-pasar: se calcula el perihelio de la orbita del encuentro
-
-    e   = sqrt(1 + 2 E L^2 / mu^2)
-    r_p = (L^2 / mu) / (1 + e)
-
-y se captura si r_p cae dentro de la ultima orbita circular estable de
-Schwarzschild, en 3 r_s. Por dentro de ese radio no existe ninguna orbita
-estable y la caida al horizonte es inevitable.
-
-Con eso, el comportamiento por masa es el que debe ser:
-
-| Agujero | Radio critico 3r_s | Planetas devorados |
-|---|---|---|
-| 10 M☉ | 5.9e-7 UA (89 km) | ninguno |
-| 1000 M☉ | 5.9e-5 UA | ninguno |
-| 4.3e6 M☉ (Sgr A*) | 0.255 UA | los ocho, y el Sol |
-
-## El agujero negro
-
-Un agujero negro de 10 masas solares tiene un horizonte de sucesos de
-**30 km**, que a escala del sistema solar son 2e-7 UA: un punto matematico.
-Ni siquiera con enfoque gravitatorio el radio de captura llega a 0.01 UA.
-
-De modo que **un agujero negro no se traga el sistema solar**. Lo destruye
-desordenando las orbitas hasta que los planetas salen despedidos con energia
-orbital positiva. Hay un test que comprueba exactamente eso: tras un
-encuentro a 100 UA hay planetas expulsados y ninguno absorbido.
-
-La visualizacion permite ampliar el horizonte hasta 10^8 veces para que se
-vea algo, y muestra el factor en pantalla mientras esta activo. Exageracion
-etiquetada, no encubierta.
-
-## Las orbitas son elipses, aunque no lo parezcan
-
-Mirando el simulador da la impresion de que los planetas giran en circulos.
-No es un fallo del modelo: es que las orbitas planetarias son casi
-circulares de verdad.
-
-| Cuerpo | Excentricidad | Achatamiento b/a | Perihelio - afelio |
+| Planeta | 1 año | 10 años | 100 años |
 |---|---|---|---|
-| Venus | 0.00678 | 0.99998 | 0.72 - 0.73 UA |
-| Tierra | 0.01671 | 0.99986 | 0.98 - 1.02 UA |
-| Marte | 0.09339 | 0.99563 | 1.38 - 1.67 UA |
-| Mercurio | 0.20564 | 0.97863 | 0.31 - 0.47 UA |
-| Pluton | 0.24883 | 0.96855 | 29.7 - 49.3 UA |
-| Halley | 0.96714 | 0.25424 | 0.59 - 35.1 UA |
+| Mercurio | 0,1 km | 1,0 km | 9,3 km |
+| Venus | 0,03 km | 0,3 km | 3,5 km |
+| Tierra (baricentro Tierra-Luna) | 7,8 km | 41 km | 303 km |
+| Marte | 0,07 km | 4,9 km | 32 km |
+| Júpiter | 0,2 km | 0,9 km | 33 km |
+| Saturno | 0,2 km | 5,8 km | 19 km |
+| Urano | 0,3 km | 3,5 km | 276 km |
+| Neptuno | 0,3 km | 2,8 km | 656 km |
 
-La elipse de la Tierra es un 0.014% mas plana que una circunferencia:
-ninguna pantalla resuelve eso. Lo que la delata no es la forma, sino que el
-Sol no esta en el centro sino en un foco, desplazado a*e = 0.0167 UA.
+La tabla completa, con todos los integradores y pasos, está en
+[docs/validation_table.md](docs/validation_table.md).
 
-Por eso el simulador dibuja las elipses osculadoras completas y marca
-perihelio y afelio: se ve que el Sol esta descentrado aunque la curva
-parezca redonda. Y por eso incluye cometas: en Halley, con e = 0.967, la
-elipse es evidente sin necesidad de medir nada.
+Comparar con una referencia externa destapó dos problemas que los tests
+anteriores no veían:
 
-## Que hay dentro
+- **Un fallo de primer orden en un integrador de cuarto orden.** La fuerza
+  relativista depende de la velocidad y Verlet la evaluaba con una velocidad
+  del paso anterior. Mercurio acababa a 1,66 millones de km. Corregido
+  evaluándola en la velocidad de medio paso.
+- **La Luna.** Tratar Tierra y Luna como un punto costaba 117 km al año.
+  Añadiendo el efecto promediado de que el Sol tira de las dos por separado,
+  el error de la Tierra baja de 11 686 km a 303 km, sin ajustar nada.
 
-```
-core/       fisica pura, sin dependencias graficas
-  units.hpp       unidades UA / dia / masa solar, G de Gauss, c, r_s
-  state.*         estado en arrays, energias y momentos
-  forces.*        gravedad newtoniana y correccion 1PN
-  integrator.*    Euler, RK4, Verlet KDK, Yoshida 4
-  ephemeris.*     elementos J2000 -> vectores de estado
-  analysis.*      elementos orbitales y tasa de precesion
-  blackhole.*     horizonte, captura, limite de Roche
-                  forces incluye tambien el achatamiento solar J2
-app/        ventana nativa con raylib
-web/        simulador.html: fichero unico, misma fisica en JavaScript
-tests/      31 casos de validacion, framework propio de 40 lineas
-bench/      corrida headless y grafica de deriva de energia
-```
+## El perihelio de Mercurio
 
-El estado del universo es un struct plano de arrays, completamente separado
-del renderizado. Reiniciar es recargar el escenario; guardar es serializar
-el struct.
+| Medida | Resultado | Referencia |
+|---|---|---|
+| Sistema solar, corrida 1PN menos corrida newtoniana | 42,976″/siglo | 42,98 |
+| Sol y Mercurio solos, con 1PN | 42,970″/siglo | fórmula de Einstein: 42,981 |
+| Avance total, simulación | 572,14″/siglo | DE441, mismo ajuste: 572,18 |
+| Sol y Mercurio solos, newtoniano (control) | 0,000″/siglo | 0 |
 
-## Poner en marcha
+La versión anterior daba 42,81 y lo llamaba error del 0,4 %. Era geometría:
+medía el perihelio proyectado sobre la eclíptica, y la órbita de Mercurio
+está inclinada 7°. El factor de proyección es 0,996.
 
-Ver [SETUP_WSL.md](SETUP_WSL.md). En resumen:
+## Experimentos guiados
+
+| Experimento | Comprobación | Resultado |
+|---|---|---|
+| Perihelio de Mercurio | 1PN menos newtoniano | 42,976″/siglo |
+| Puntos de Lagrange | Periodo de libración en L4 | medido 147,3 años, teoría 147,3 |
+| | Seis troyanos reales frente a Horizons, 100 años | peor error 199 km |
+| Asistencia gravitatoria | Voyager 2 en Júpiter | 9,97 → 19,98 km/s (JPL: 19,95) |
+| Integradores | Orden de convergencia medido | 0,97 · 2,00 · 4,20 · 4,00 · 5,91 |
+
+## Reproducirlo
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
-./build/gl_tests     # 17 casos
-./build/gl_bench     # genera energy_drift.csv
 ```
 
-Para el simulador interactivo basta con abrir `web/simulador.html` en
-cualquier navegador. Es un fichero unico sin dependencias: no hace falta
-servidor, ni compilar, ni conexion.
+```bash
+./build/gl_tests
+```
 
-## Estabilidad numerica
+```bash
+cd web && npm test
+```
 
-Con paso de tiempo fijo la simulacion revienta en cuanto hay un encuentro
-cercano: la aceleracion se dispara, la posicion salta a infinito y en pocos
-pasos todo el estado es NaN. Es el fallo clasico de los integradores de
-paso fijo, y hay un test que lo documenta a proposito.
+Para ver la web en local:
 
-La solucion es subdividir el paso segun la escala de tiempo dinamica local:
+```bash
+cd web && python3 -m http.server 8000
+```
 
-    dt = eta * min( |v|/|a| ,  sqrt(r^3 / (G*(m_i+m_j))) )
+## Cómo se ha hecho
 
-El primer termino es el tiempo en que la gravedad cambia apreciablemente la
-velocidad; el segundo, el tiempo de caida libre entre los dos cuerpos mas
-proximos. Con eta = 0.02 salen unos 300 pasos por orbita.
+El código de este repositorio se escribió con ayuda de IA (Claude Code, de
+Anthropic), bajo mi dirección y revisión. Lo digo con claridad porque lo
+contrario sería deshonesto. Lo interesante del proyecto no es quién lo
+tecleó, sino que cada afirmación está respaldada por un test que cualquiera
+puede ejecutar.
 
-Encima de eso hay dos redes de seguridad: un presupuesto maximo de subpasos
-por llamada, para que un encuentro violento ralentice la simulacion en vez
-de colgarla, y una pasada que retira cuerpos cuyo estado ha dejado de ser
-finito, porque un solo NaN contamina a todos los demas a traves de las
-aceleraciones en un unico paso.
+## Datos
 
-Verificado: 240000 pasos objetivo con un agujero negro de 10 masas solares
-atravesando el sistema se resuelven en 714000 subpasos, sin un solo NaN y
-sin perder ningun cuerpo.
+Efemérides: NASA/JPL Solar System Dynamics, Horizons System (DE441), datos
+descargados el 16 de noviembre de 2026, https://ssd.jpl.nasa.gov. Estrellas:
+catálogo XHIP (Anderson y Francis 2012). Este proyecto no está afiliado a la
+NASA ni al JPL.
 
-## Limitaciones conocidas
+## Autor
 
-- Paso de tiempo fijo. Un encuentro cercano exige bajarlo a mano.
-- El termino 1PN se aplica solo respecto al cuerpo central dominante, no
-  como la formulacion completa de Einstein-Infeld-Hoffmann.
-- La Tierra y la Luna van como un solo cuerpo en el baricentro del par.
-- Faltan asteroides, achatamiento solar y presion de radiacion. De ahi el
-  0.9% de diferencia entre los 526.6 arcsec/siglo medidos aqui y los 531.5
-  del valor de libro.
-- La version web integra en doble precision de JavaScript y usa proyeccion
-  ortografica sobre el plano de la ecliptica, no un render 3D completo.
-- El fondo estelar es un mapa equirectangular de 28 estrellas reales con sus
-  coordenadas J2000, magnitudes y colores por tipo espectral, mas relleno
-  sintetico. No rota con la camara: es telon de fondo, no paralaje real.
-- La Luna va incorporada a la Tierra como un solo cuerpo en el baricentro
-  del par.
+Diego Macías Vega · [github.com/didimacveg](https://github.com/didimacveg)
+
+Licencia MIT.

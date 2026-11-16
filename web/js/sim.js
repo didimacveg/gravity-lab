@@ -200,6 +200,7 @@ export class Simulation {
       d -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
       this.grVarpi[s] = d;
     }
+    this.lastSample = s;
     if (s < this.lo) this.lo = s;
     if (s > this.hi) this.hi = s;
   }

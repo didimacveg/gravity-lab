@@ -293,6 +293,7 @@ export class Renderer {
     }
     this.screen.sort((a, b) => b.z - a.z);
     ctx.font = "11px 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
+    const pending = [];
     for (const b of this.screen) {
       const st = this.styleOf(world, b.i), kind = world.kind[b.i];
       if (b.x < -50 || b.x > W + 50 || b.y < -50 || b.y > H + 50) continue;
@@ -317,8 +318,21 @@ export class Renderer {
         ctx.strokeStyle = "#7fd4ff"; ctx.beginPath(); ctx.arc(b.x, b.y, st.r + 5, 0, 6.3); ctx.stroke();
       }
       if (this.show.labels && (kind !== "trojan" || b.i === this.selected || opts.labelAll))
-        this._label(this.nameOf(world.name[b.i]), b.x + st.r + 5, b.y + 4,
-                    b.i === this.selected ? "#e8eef7" : "#93a1b5");
+        pending.push({ text: this.nameOf(world.name[b.i]), x: b.x, y: b.y, r: st.r, z: b.z, sel: b.i === this.selected });
+    }
+    // Labels: nearest bodies first; a label that would cover another one
+    // moves to the left of its body, and is dropped if that fails too.
+    pending.sort((a, b) => (b.sel - a.sel) || (a.z - b.z));
+    const placed = [];
+    for (const l of pending) {
+      const w = ctx.measureText(l.text).width;
+      for (const x of [l.x + l.r + 5, l.x - l.r - 5 - w]) {
+        const box = [x - 2, l.y - 8, x + w + 2, l.y + 6];
+        if (placed.some((q) => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) continue;
+        placed.push(box);
+        this._label(l.text, x, l.y + 4, l.sel ? "#e8eef7" : "#93a1b5");
+        break;
+      }
     }
   }
 

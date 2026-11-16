@@ -261,8 +261,7 @@ function updateInfo() {
   }
   add("info.mass", w.mass[i] > 0 ? `${formatValue(w.mass[i])} M☉` : t("info.tracer"));
   if (i >= 1 && i <= 8 && s.sim.ref) {
-    const sample = s.sim.ref.epochIndex + Math.round(w.time / s.sim.ref.cadence);
-    const e = s.sim.err[i - 1][sample];
+    const e = s.sim.err[i - 1][s.sim.lastSample];
     add("info.error", Number.isFinite(e) ? formatValue(e, "km") : "–");
   }
   const dot = h("i"); dot.style.background = renderer.styleOf(w, i).color;
@@ -328,10 +327,9 @@ function refreshValidation(force = false) {
   charts.error.setData(x, errs);
   charts.energy.setData(x, [en]);
   charts.gr.setData(x, sim.twin ? [gr, line] : [[], line]);
-  const sample = ref.epochIndex + Math.round(sim.world.time / ref.cadence);
   const rows = $("error-table").tBodies[0].rows;
   for (let p = 0; p < 8; p++) {
-    const now = sim.err[p][Math.max(sim.lo, Math.min(sim.hi, sample))];
+    const now = sim.err[p][sim.lastSample];
     rows[p].cells[1].textContent = formatValue(now, "km");
     rows[p].cells[2].textContent = formatValue(sim.maxErr[p], "km");
   }
