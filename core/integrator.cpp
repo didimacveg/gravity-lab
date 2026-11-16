@@ -7,10 +7,42 @@
 
 namespace gl {
 
+// Velocity Verlet (kick-drift-kick).
+//
+// Con fuerzas que solo dependen de la posicion es el esquema de siempre.
+// El termino 1PN depende ademas de la velocidad, y ahi hay una trampa: si
+// el primer medio kick usa la aceleracion guardada del paso anterior (que
+// se evaluo con una velocidad vieja), el metodo deja de ser simetrico en
+// el tiempo, baja a primer orden y el semieje de Mercurio deriva. Medido
+// contra JPL Horizons, ese fallo costaba 1.7 millones de km en un siglo.
+//
+// La version correcta evalua el termino de velocidad, en los DOS medios
+// kicks, en la velocidad de medio paso v_h:
+//     v_h = v_0 + (dt/2) [ a_N(x_0) + a_PN(x_0, v_h) ]    (implicito)
+//     x_1 = x_0 + dt v_h
+//     v_1 = v_h + (dt/2) [ a_N(x_1) + a_PN(x_1, v_h) ]    (explicito)
+// Invertir el signo de dt deshace el paso exactamente, asi que el esquema
+// es reversible y de segundo orden, y la composicion de Yoshida vuelve a
+// dar cuarto orden. La ecuacion implicita se resuelve por punto fijo: el
+// termino 1PN es ~1e-7 del newtoniano y converge en dos vueltas.
 static void verletKDK(World& w, double dt, const ForceConfig& cfg) {
     const std::size_t n = w.size();
-    for (std::size_t i = 0; i < n; ++i)
-        if (w.alive[i]) w.velocity[i] += w.acceleration[i] * (0.5 * dt);
+    if (cfg.enable1PN && w.accelerationPN.size() == n) {
+        std::vector<Vec3> aN(n), vh(n), pn = w.accelerationPN;
+        for (std::size_t i = 0; i < n; ++i)
+            aN[i] = w.acceleration[i] - w.accelerationPN[i];
+        for (int it = 0; it < 3; ++it) {
+            for (std::size_t i = 0; i < n; ++i)
+                vh[i] = w.velocity[i] + (aN[i] + pn[i]) * (0.5 * dt);
+            compute1PN(w, vh, cfg, pn);
+        }
+        for (std::size_t i = 0; i < n; ++i)
+            if (w.alive[i])
+                w.velocity[i] += (aN[i] + pn[i]) * (0.5 * dt);
+    } else {
+        for (std::size_t i = 0; i < n; ++i)
+            if (w.alive[i]) w.velocity[i] += w.acceleration[i] * (0.5 * dt);
+    }
     for (std::size_t i = 0; i < n; ++i)
         if (w.alive[i]) w.position[i] += w.velocity[i] * dt;
     computeAccelerations(w, cfg);
@@ -129,6 +161,21 @@ void step(World& w, double dt, Integrator method, const ForceConfig& cfg) {
             verletKDK(w, w0 * dt, cfg);
             verletKDK(w, w1 * dt, cfg);
             w.time = t0 + dt;  // los tres sub-pasos suman dt exacto
+            return;
+        }
+        case Integrator::Yoshida6: {
+            // Yoshida (1990), solucion A de sexto orden: siete pasos de
+            // Verlet simetricos, w3 w2 w1 w0 w1 w2 w3. Cuesta 7 evaluaciones
+            // de fuerza por paso frente a las 3 de Yoshida 4, pero su error
+            // cae como dt^6, asi que permite pasos mucho mas largos.
+            const double w1 = -1.17767998417887;
+            const double w2 = 0.235573213359357;
+            const double w3 = 0.784513610477560;
+            const double w0 = 1.0 - 2.0 * (w1 + w2 + w3);
+            const double t0 = w.time;
+            for (double c : {w3, w2, w1, w0, w1, w2, w3})
+                verletKDK(w, c * dt, cfg);
+            w.time = t0 + dt;
             return;
         }
     }

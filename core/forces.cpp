@@ -36,6 +36,30 @@ void computeAccelerations(World& w, const ForceConfig& cfg) {
         }
     }
 
+    if (cfg.enableEarthMoonQuadrupole && cfg.earthIndex < n &&
+        w.alive[cfg.earthIndex]) {
+        std::size_t c = 0;
+        for (std::size_t i = 0; i < n; ++i)
+            if (w.alive[i] && w.mass[i] > w.mass[c]) c = i;
+        const std::size_t e = cfg.earthIndex;
+        if (e != c) {
+            const Vec3 a = accelerationEarthMoonQuadrupole(
+                w.position[e] - w.position[c], w.mass[c]);
+            w.acceleration[e] += a;
+            // Reaccion sobre el Sol: tercera ley, el momento se conserva.
+            w.acceleration[c] -= a * (w.mass[e] / w.mass[c]);
+        }
+    }
+
+    compute1PN(w, w.velocity, cfg, w.accelerationPN);
+    if (!cfg.enable1PN) return;
+    for (std::size_t i = 0; i < n; ++i) w.acceleration[i] += w.accelerationPN[i];
+}
+
+void compute1PN(const World& w, const std::vector<Vec3>& vel,
+                const ForceConfig& cfg, std::vector<Vec3>& out) {
+    const std::size_t n = w.size();
+    out.assign(n, Vec3{});
     if (!cfg.enable1PN) return;
 
     // Correccion relativista respecto al cuerpo dominante.
@@ -47,9 +71,8 @@ void computeAccelerations(World& w, const ForceConfig& cfg) {
     for (std::size_t i = 0; i < n; ++i) {
         if (i == central || !w.alive[i]) continue;
         if (w.mass[i] > 1e-3 * w.mass[central]) continue;  // no despreciable
-        w.acceleration[i] += acceleration1PN(w.position[i] - w.position[central],
-                                             w.velocity[i] - w.velocity[central],
-                                             w.mass[central]);
+        out[i] = acceleration1PN(w.position[i] - w.position[central],
+                                 vel[i] - vel[central], w.mass[central]);
     }
 }
 
@@ -63,6 +86,13 @@ Vec3 accelerationJ2(const Vec3& d, double centralMass, double radius,
     const double z2r2 = 5.0 * d.z * d.z / r2;
     return Vec3{k * d.x * (1.0 - z2r2), k * d.y * (1.0 - z2r2),
                 k * d.z * (3.0 - z2r2)};
+}
+
+Vec3 accelerationEarthMoonQuadrupole(const Vec3& d, double centralMass) {
+    const double r2 = d.normSquared();
+    if (r2 <= 0.0) return Vec3{};
+    const double r = std::sqrt(r2);
+    return d * (-EARTH_MOON_QUADRUPOLE_AU2 * G * centralMass / (r2 * r2 * r));
 }
 
 Vec3 acceleration1PN(const Vec3& relPos, const Vec3& relVel,

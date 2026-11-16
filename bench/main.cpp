@@ -15,6 +15,7 @@ static const char* nameOf(Integrator m) {
         case Integrator::RK4: return "rk4";
         case Integrator::VerletKDK: return "verlet";
         case Integrator::Yoshida4: return "yoshida4";
+        case Integrator::Yoshida6: return "yoshida6";
     }
     return "?";
 }
